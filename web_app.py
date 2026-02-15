@@ -1,78 +1,49 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-import json
-import os
-from datetime import datetime
 
-# --- 設定 ---
-DATA_FILE = "journals.json"
-MASTER_FILE = "会計.xlsm"
-
-# --- 元のロジックをそのまま流用 ---
-def load_master():
-    try:
-        df = pd.read_excel(MASTER_FILE, sheet_name="マスター")
-        return df, df.set_index("勘定科目").to_dict(orient="index"), df["勘定科目"].tolist()
-    except Exception as e:
-        st.error(f"マスター読み込み失敗: {e}")
-        return None, {}, []
-
-def load_journals():
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return []
-
-def save_journals(journals):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(journals, f, ensure_ascii=False, indent=4)
-
-# --- 画面表示設定 ---
-st.set_page_config(page_title="P5 Accounting Web", layout="centered")
-
-# デザイン調整
-st.markdown("""
-    <style>
-    .main { background-color: #000000; color: #FFFFFF; }
-    .stButton>button { background-color: #FF0000; color: white; font-weight: bold; width: 100%; }
-    </style>
-    """, unsafe_allow_html=True)
-
+st.set_page_config(page_title="Accounting Web", page_icon="🧧")
 st.title("🧧 Accounting Web")
 
-master_df, master_data, account_list = load_master()
-journals = load_journals()
+# Google Sheetsへの接続
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- 修正ポイント1: st.formを外して、即時反映＆Enter対応にする ---
-st.subheader("新規仕訳入力")
+# マスター（勘定科目など）の読み込み
+# スプレッドシート内の「マスター」という名前のシートを読み込む設定です
+try:
+    master_df = conn.read(worksheet="マスター")
+    category_list = master_df["勘定科目"].dropna().tolist()
+except Exception as e:
+    st.error(f"マスターの読み込みに失敗しました。スプレッドシートのシート名が「マスター」になっているか確認してください。")
+    st.stop()
 
-date = st.date_input("日付", datetime.now())
-debit = st.selectbox("借方科目", account_list)
-credit = st.selectbox("貸方科目", account_list)
+st.header("新規仕訳入力")
 
-# --- 修正ポイント2: value=None にすることで初期値を空にし、入力しやすくする ---
-amount = st.number_input("金額", min_value=0, step=1000, value=None, placeholder="金額を入力...")
+with st.form("input_form"):
+    date = st.date_input("日付")
+    debit_category = st.selectbox("借方科目", options=category_list)
+    credit_category = st.selectbox("貸方科目", options=category_list)
+    amount = st.number_input("金額", min_value=0, step=100)
+    description = st.text_input("摘要")
+    
+    submit_button = st.form_submit_button("登録")
 
-# 登録ボタン
-if st.button("仕訳登録"):
-    if amount is None or amount == 0:
-        st.warning("金額を入力してください")
-    else:
-        new_entry = {
-            "date": date.strftime("%Y-%m-%d"),
-            "debit": debit, 
-            "debit_amount": amount,
-            "credit": credit, 
-            "credit_amount": amount
-        }
-        journals.append(new_entry)
-        save_journals(journals)
-        st.success(f"登録完了: {amount:,}円")
-        # 登録後に画面をリフレッシュして入力を空にする
-        st.rerun()
-
-st.divider()
-st.subheader("最新の履歴")
-if journals:
-    df_hist = pd.DataFrame(journals).iloc[::-1].head(5)
-    st.table(df_hist)
+if submit_button:
+    # 新しい仕訳データを作成
+    new_data = pd.DataFrame([{
+        "日付": str(date),
+        "借方科目": debit_category,
+        "貸方科目": credit_category,
+        "金額": amount,
+        "摘要": description
+    }])
+    
+    # スプレッドシートの「仕訳帳」シートに追記
+    try:
+        existing_data = conn.read(worksheet="仕訳帳")
+        updated_data = pd.concat([existing_data, new_data], ignore_index=True)
+        conn.update(worksheet="仕訳帳", data=updated_data)
+        st.success("スプレッドシートに登録しました！")
+        st.balloons()
+    except Exception as e:
+        st.error(f"登録に失敗しました: {e}")
