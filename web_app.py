@@ -8,9 +8,9 @@ st.title("🧧 Accounting Web")
 # Google Sheetsへの接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# マスター（勘定科目など）の読み込み
-# スプレッドシート内の「マスター」という名前のシートを読み込む設定です
+# マスターの読み込み
 try:
+    # URLはSecretsから自動で読み込まれます
     master_df = conn.read(worksheet="マスター")
     category_list = master_df["勘定科目"].dropna().tolist()
 except Exception as e:
@@ -29,7 +29,6 @@ with st.form("input_form"):
     submit_button = st.form_submit_button("登録")
 
 if submit_button:
-    # 新しい仕訳データを作成
     new_data = pd.DataFrame([{
         "日付": str(date),
         "借方科目": debit_category,
@@ -38,7 +37,6 @@ if submit_button:
         "摘要": description
     }])
     
-    # スプレッドシートの「仕訳帳」シートに追記
     try:
         existing_data = conn.read(worksheet="仕訳帳")
         updated_data = pd.concat([existing_data, new_data], ignore_index=True)
