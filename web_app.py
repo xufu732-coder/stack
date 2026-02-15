@@ -11,7 +11,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 # マスターの読み込み
 try:
     # URLはSecretsから自動で読み込まれます
-    master_df = conn.read(worksheet="マスター")
+    master_df = conn.read(spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"], worksheet="マスター")
     category_list = master_df["勘定科目"].dropna().tolist()
 except Exception as e:
     st.error(f"マスターの読み込みに失敗しました。スプレッドシートのシート名が「マスター」になっているか確認してください。")
@@ -45,3 +45,4 @@ if submit_button:
         st.balloons()
     except Exception as e:
         st.error(f"登録に失敗しました: {e}")
+
