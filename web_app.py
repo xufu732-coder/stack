@@ -5,16 +5,19 @@ import pandas as pd
 st.set_page_config(page_title="Accounting Web", page_icon="🧧")
 st.title("🧧 Accounting Web")
 
+# 【ここを修正！】あなたの中身をここに直接貼り付けます
+url = "https://docs.google.com/spreadsheets/d/1-4wPWmJEAI2jIoE7poCSOeKfqSIFMf2mn_U_EkCQ1X4/edit"
+
 # Google Sheetsへの接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # マスターの読み込み
 try:
-    # URLはSecretsから自動で読み込まれます
-    master_df = conn.read(spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"], worksheet="マスター")
+    # Secretsを通さず、上の「url」を直接見に行きます
+    master_df = conn.read(spreadsheet=url, worksheet="マスター")
     category_list = master_df["勘定科目"].dropna().tolist()
 except Exception as e:
-    st.error(f"マスターの読み込みに失敗しました。スプレッドシートのシート名が「マスター」になっているか確認してください。")
+    st.error(f"マスターの読み込みに失敗しました。エラー内容: {e}")
     st.stop()
 
 st.header("新規仕訳入力")
@@ -38,11 +41,11 @@ if submit_button:
     }])
     
     try:
-        existing_data = conn.read(worksheet="仕訳帳")
+        # 登録時も直接URLを指定します
+        existing_data = conn.read(spreadsheet=url, worksheet="仕訳帳")
         updated_data = pd.concat([existing_data, new_data], ignore_index=True)
-        conn.update(worksheet="仕訳帳", data=updated_data)
+        conn.update(spreadsheet=url, worksheet="仕訳帳", data=updated_data)
         st.success("スプレッドシートに登録しました！")
         st.balloons()
     except Exception as e:
         st.error(f"登録に失敗しました: {e}")
-
