@@ -8,7 +8,8 @@ st.set_page_config(page_title="会計アプリ", page_icon="🧧")
 st.title("🧧 会計入力アプリ")
 
 # --- 設定：スプレッドシートのURLを直接指定 ---
-spreadsheet_url = "https://docs.google.com/spreadsheets/d/1-4WPWmJEAI2jIoE7poCSOEKfqSIFMf2mn_U_EkCQ1X4/export?format=csv"
+# 以下のURLに、?usp=sharing などを一切入れず、これだけで上書きしてください
+spreadsheet_url = "https://docs.google.com/spreadsheets/d/1-4WPWmJEAI2jIoE7poCSOEKfqSIFMf2mn_U_EkCQ1X4/edit"
 
 # Google Sheetsへの接続
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -53,6 +54,7 @@ if submit_button:
         st.balloons()
     except Exception as e:
         st.error(f"登録中にエラーが発生しました: {e}")
+
 
 
 
