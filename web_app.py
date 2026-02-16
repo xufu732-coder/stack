@@ -143,21 +143,31 @@ if menu == "仕訳入力":
                 st.session_state.journals_df = updated_df
                 st.rerun()
 
-# --- マスター確認画面（脱Excelレイアウト） ---
+# --- マスター確認画面（詳細表示対応） ---
 elif menu == "マスター確認":
     st.header("MASTER DATA")
     if not master_df.empty:
-        st.caption("現在登録されている勘定科目")
-        # カテゴリごとに分けて表示するなど、より見やすくする工夫
+        st.caption("勘定科目をクリックすると詳細を確認できます")
+        
+        # 3列のレイアウトで科目を配置
         m_cols = st.columns(3)
         for i, row in master_df.iterrows():
             with m_cols[i % 3]:
-                st.markdown(f"**・ {row['勘定科目']}**")
+                # expander（折りたたみ）を使うことで、Excel感を消しつつ詳細を表示
+                with st.expander(f"{row['勘定科目']}"):
+                    st.markdown(f"""
+                    <div style="font-size: 0.85rem; line-height: 1.6;">
+                    <b>■ 分類</b><br>{row['分類']}<br>
+                    <b>■ 詳細分類</b><br>{row['詳細分類']}<br>
+                    <b>■ 計算方向</b><br>{row['計算方向']}<br>
+                    <b>■ コード(参考)</b><br>{row['コード(参考)']}
+                    </div>
+                    """, unsafe_allow_html=True)
     else:
         st.write("マスターデータが読み込めません。")
-
 # --- 財務諸表（一時的なデータ確認） ---
 elif menu == "財務諸表":
     st.header("FINANCIAL STATEMENTS")
     st.write("データ整合性確認用")
     st.dataframe(pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True))
+
