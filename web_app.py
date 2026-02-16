@@ -33,16 +33,14 @@ if 'temp_journals' not in st.session_state:
 if 'multi_row_mode' not in st.session_state:
     st.session_state.multi_row_mode = False
 
-# --- 金額連動ロジック (エラー回避版) ---
-if 'shared_amt' not in st.session_state:
-    st.session_state.shared_amt = 0
+# --- main.py 方式：即時連動コールバック ---
+def sync_deb_to_cre():
+    # 借方が入力されたら貸方を上書きして即再描画
+    st.session_state["cre_a"] = st.session_state["deb_a"]
 
-def update_amt():
-    # 入力された方の値を共有変数にコピーする
-    if st.session_state.deb_a != st.session_state.shared_amt:
-        st.session_state.shared_amt = st.session_state.deb_a
-    elif st.session_state.cre_a != st.session_state.shared_amt:
-        st.session_state.shared_amt = st.session_state.cre_a
+def sync_cre_to_deb():
+    # 貸方が入力されたら借方を上書きして即再描画
+    st.session_state["deb_a"] = st.session_state["cre_a"]
 
 account_list = load_github_csv(MASTER_FILE)["勘定科目"].tolist() if 'master_df' not in st.session_state else st.session_state.master_df["勘定科目"].tolist()
 
@@ -62,31 +60,34 @@ if menu == "仕訳入力":
     date = st.date_input("日付", value=datetime.now())
 
     if not st.session_state.multi_row_mode:
+        # 中段：4列構成（科目、金額、科目、金額）
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             debit_sub = st.selectbox("借方科目", account_list, key="deb_s")
         with c2:
-            # 共有変数を参照し、変更があったらupdate_amtを呼ぶ
-            debit_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a", value=st.session_state.shared_amt, on_change=update_amt)
+            # keyを指定し、on_changeで即時実行。main.pyと同じ挙動。
+            debit_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a", on_change=sync_deb_to_cre)
         with c3:
             credit_sub = st.selectbox("貸方科目", account_list, key="cre_s")
         with c4:
-            credit_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a", value=st.session_state.shared_amt, on_change=update_amt)
+            # keyを指定し、on_changeで即時実行。main.pyと同じ挙動。
+            credit_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a", on_change=sync_cre_to_deb)
 
         memo = st.text_input("摘要 (MEMO)")
         
         if st.button("リストに追加 (Add to list)"):
-            if st.session_state.shared_amt > 0:
-                new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, st.session_state.shared_amt, credit_sub, st.session_state.shared_amt, memo]], 
+            if st.session_state.deb_a > 0:
+                new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, st.session_state.deb_a, credit_sub, st.session_state.cre_a, memo]], 
                                        columns=st.session_state.temp_journals.columns)
                 st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
-                # 共有変数を戻すだけで、両方の入力欄が次回の描画で0に戻る
-                st.session_state.shared_amt = 0
+                # 登録後は数値を0にリセット
+                st.session_state.deb_a = 0
+                st.session_state.cre_a = 0
                 st.rerun()
     else:
         st.info("複数行仕訳モード：UI構築準備中")
 
-    # --- 送信待ちエリア / 履歴エリア（配置・デザイン・個別削除を維持） ---
+    # --- 送信待ちエリア / 履歴エリア（デザイン・整列・削除機能を完全維持） ---
     st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
         cols_w = [1.2, 2.3, 2.3, 1.2, 2, 1.2] 
@@ -128,6 +129,7 @@ if menu == "仕訳入力":
                 st.session_state.journals_df = updated_df
                 st.rerun()
 
+# 財務諸表などの他メニューは維持
 elif menu == "マスター確認":
     st.header("MASTER DATA")
     st.dataframe(st.session_state.master_df)
