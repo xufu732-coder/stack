@@ -4,7 +4,7 @@ from github import Github
 from datetime import datetime
 import io
 
-# --- 設定 & 接続 ---
+# --- 設定 & 接続 (変更なし) ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_NAME = "xufu732-coder/stack" 
 JOURNAL_FILE = "journal.csv"
@@ -36,7 +36,6 @@ all_data = pd.concat([st.session_state.journals_df, st.session_state.temp_journa
 if menu == "仕訳入力":
     st.header("JOURNAL INPUT (サクサク入力モード)")
     
-    # 入力セクション
     date = st.date_input("日付", value=datetime.now())
     col_in1, col_in2 = st.columns(2)
     with col_in1:
@@ -53,11 +52,11 @@ if menu == "仕訳入力":
             st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
             st.rerun()
 
-    # 送信待ちセクション
+    # --- 送信待ちエリア ---
     st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
-        # ヘッダー (金額と貸方を入れ替え)
-        h_col = st.columns([1.5, 2, 2, 1.5, 2.5, 1])
+        # 比率調整：右端(削除ボタン)を1.5に広げて横書きを確保
+        h_col = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
         h_col[0].caption("日付")
         h_col[1].caption("借方")
         h_col[2].caption("貸方")
@@ -65,11 +64,11 @@ if menu == "仕訳入力":
         h_col[4].caption("摘要")
 
         for i, row in st.session_state.temp_journals.iterrows():
-            c = st.columns([1.5, 2, 2, 1.5, 2.5, 1])
+            c = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
             c[0].text(row['日付'])
             c[1].text(row['借方'])
-            c[2].text(row['貸方']) # 貸方を先に
-            c[3].text(f"{row['金額']:,}") # 金額を後に
+            c[2].text(row['貸方'])
+            c[3].text(f"{row['金額']:,}")
             c[4].text(row['摘要'])
             if c[5].button("消去", key=f"t_del_{i}"):
                 st.session_state.temp_journals = st.session_state.temp_journals.drop(i).reset_index(drop=True)
@@ -81,14 +80,14 @@ if menu == "仕訳入力":
             repo = g.get_repo(REPO_NAME)
             csv_content = final_df.to_csv(index=False)
             contents = repo.get_contents(JOURNAL_FILE)
-            repo.update_file(JOURNAL_FILE, "Update", csv_content, contents.sha)
+            repo.update_file(JOURNAL_FILE, "Batch update", csv_content, contents.sha)
             st.session_state.journals_df = final_df
             st.session_state.temp_journals = pd.DataFrame(columns=st.session_state.temp_journals.columns)
             st.rerun()
 
     st.divider()
     
-    # 履歴セクション
+    # --- 履歴エリア ---
     st.subheader("保存済み履歴 (HISTORY)")
     if st.button("【警告】全履歴削除"):
         g = Github(GITHUB_TOKEN)
@@ -101,8 +100,8 @@ if menu == "仕訳入力":
         st.rerun()
 
     if not st.session_state.journals_df.empty:
-        # ヘッダー
-        th = st.columns([1.5, 2, 2, 1.5, 2.5, 1])
+        # ヘッダー比率を送信待ちエリアと統一
+        th = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
         th[0].caption("日付")
         th[1].caption("借方")
         th[2].caption("貸方")
@@ -110,31 +109,30 @@ if menu == "仕訳入力":
         th[4].caption("摘要")
         
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
-            tr = st.columns([1.5, 2, 2, 1.5, 2.5, 1])
+            tr = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
             tr[0].text(row['日付'])
             tr[1].text(row['借方'])
             tr[2].text(row['貸方'])
             tr[3].text(f"{row['金額']:,}")
             tr[4].text(row['摘要'] if pd.notna(row['摘要']) else "")
-            # ボタンの文字を「削除」にし、幅を確保して横並びを維持
+            # カラム幅 1.5 で「削除」の横並びを確保
             if tr[5].button("削除", key=f"h_del_{i}"):
                 updated_df = st.session_state.journals_df.drop(i).reset_index(drop=True)
                 g = Github(GITHUB_TOKEN)
                 repo = g.get_repo(REPO_NAME)
                 csv_content = updated_df.to_csv(index=False)
                 contents = repo.get_contents(JOURNAL_FILE)
-                repo.update_file(JOURNAL_FILE, "Delete", csv_content, contents.sha)
+                repo.update_file(JOURNAL_FILE, "Delete row", csv_content, contents.sha)
                 st.session_state.journals_df = updated_df
                 st.rerun()
 
+# 他のメニューは枠組みを維持
 elif menu == "マスター確認":
     st.header("MASTER DATA")
     st.dataframe(st.session_state.master_df)
-
 elif menu == "財務諸表":
     st.header("FINANCIAL STATEMENTS")
     st.dataframe(all_data)
-
 elif menu == "月次推移":
     st.header("MONTHLY TREND")
-    st.write("推移を表示中...")
+    st.write("推移データを表示")
