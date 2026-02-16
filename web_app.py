@@ -26,6 +26,7 @@ def load_github_csv(file_name):
         return pd.read_csv(io.StringIO(contents.decoded_content.decode('utf-8')))
     except: return pd.DataFrame()
 
+# セッション状態の初期化
 if 'journals_df' not in st.session_state:
     st.session_state.journals_df = load_github_csv(JOURNAL_FILE)
 if 'temp_journals' not in st.session_state:
@@ -33,12 +34,16 @@ if 'temp_journals' not in st.session_state:
 if 'multi_row_mode' not in st.session_state:
     st.session_state.multi_row_mode = False
 
-# --- ② 金額を連動させるためのコールバック関数 ---
-def sync_debit_to_credit():
-    st.session_state.cre_a = st.session_state.deb_a
+# 【重要】金額連動のための初期値設定
+if 'sync_amt' not in st.session_state:
+    st.session_state.sync_amt = 0
 
-def sync_credit_to_debit():
-    st.session_state.deb_a = st.session_state.cre_a
+# 金額を同期させるコールバック
+def sync_val():
+    if 'deb_a' in st.session_state and st.session_state.deb_a != st.session_state.sync_amt:
+        st.session_state.sync_amt = st.session_state.deb_a
+    elif 'cre_a' in st.session_state and st.session_state.cre_a != st.session_state.sync_amt:
+        st.session_state.sync_amt = st.session_state.cre_a
 
 account_list = load_github_csv(MASTER_FILE)["勘定科目"].tolist() if 'master_df' not in st.session_state else st.session_state.master_df["勘定科目"].tolist()
 
@@ -55,40 +60,38 @@ if menu == "仕訳入力":
             st.session_state.multi_row_mode = not st.session_state.multi_row_mode
             st.rerun()
 
-    # --- ① 入力エリアの配置変更 ---
     date = st.date_input("日付", value=datetime.now())
 
     if not st.session_state.multi_row_mode:
+        # 中段：4列構成（科目・金額・科目・金額）
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             debit_sub = st.selectbox("借方科目", account_list, key="deb_s")
         with c2:
-            # 借方に入力されたら貸方を同期
-            debit_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a", on_change=sync_debit_to_credit)
+            # valueに共通のsync_amtを紐付け、on_changeで即時同期
+            debit_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a", value=st.session_state.sync_amt, on_change=sync_val)
         with c3:
             credit_sub = st.selectbox("貸方科目", account_list, key="cre_s")
         with c4:
-            # 貸方に入力されたら借方を同期
-            credit_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a", on_change=sync_credit_to_debit)
+            credit_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a", value=st.session_state.sync_amt, on_change=sync_val)
 
         memo = st.text_input("摘要 (MEMO)")
         
         if st.button("リストに追加 (Add to list)"):
-            if debit_amt and debit_amt > 0:
-                new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, debit_amt, credit_sub, credit_amt, memo]], 
+            if st.session_state.sync_amt > 0:
+                new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, st.session_state.sync_amt, credit_sub, st.session_state.sync_amt, memo]], 
                                        columns=st.session_state.temp_journals.columns)
                 st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
                 # 登録後は数値をリセット
-                st.session_state.deb_a = 0
-                st.session_state.cre_a = 0
+                st.session_state.sync_amt = 0
                 st.rerun()
     else:
         st.info("複数行仕訳モード：UI構築準備中")
 
-    # --- ③ 表示セクション（以前のデザインを維持） ---
+    # --- 送信待ちエリア / 履歴エリア（デザイン維持） ---
     st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
-        cols_w = [1.2, 2.3, 2.3, 1.2, 2, 1] 
+        cols_w = [1.2, 2.3, 2.3, 1.2, 2, 1.2] 
         h = st.columns(cols_w)
         h[0].caption("日付"); h[1].caption("借方"); h[2].caption("貸方"); h[3].caption("金額"); h[4].caption("摘要")
         for i, row in st.session_state.temp_journals.iterrows():
@@ -112,10 +115,10 @@ if menu == "仕訳入力":
     st.divider()
     st.subheader("保存済み履歴 (HISTORY)")
     if not st.session_state.journals_df.empty:
-        th = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1])
+        th = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1.2])
         th[0].caption("日付"); th[1].caption("借方"); th[2].caption("貸方"); th[3].caption("金額"); th[4].caption("摘要")
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
-            tr = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1])
+            tr = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1.2])
             fields = [row['日付'], row['借方'], row['貸方'], f"{row['金額']:,}", row['摘要'] if pd.notna(row['摘要']) else '']
             for idx, val in enumerate(fields):
                 tr[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
@@ -127,7 +130,6 @@ if menu == "仕訳入力":
                 st.session_state.journals_df = updated_df
                 st.rerun()
 
-# 以降のメニューは維持
 elif menu == "マスター確認":
     st.header("MASTER DATA")
     st.dataframe(st.session_state.master_df)
