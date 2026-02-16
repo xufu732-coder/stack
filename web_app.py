@@ -26,12 +26,10 @@ def load_github_csv(file_name):
         return pd.read_csv(io.StringIO(contents.decoded_content.decode('utf-8')))
     except: return pd.DataFrame()
 
-# 財務諸表に対応するための標準列（金額を左右に分離）
 COLUMNS = ["日付", "借方", "借方金額", "貸方", "貸方金額", "摘要"]
 
 if 'journals_df' not in st.session_state:
     df = load_github_csv(JOURNAL_FILE)
-    # 旧データ（金額列1つ）がある場合、新形式へ自動変換して読み込む
     if not df.empty and "金額" in df.columns:
         df = df.rename(columns={"金額": "借方金額"})
         df["貸方金額"] = df["借方金額"]
@@ -67,7 +65,6 @@ if menu == "仕訳入力":
     date = st.date_input("日付", value=datetime.now())
 
     if not st.session_state.multi_row_mode:
-        # 4列配置
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             debit_sub = st.selectbox("借方科目", account_list, key="deb_s")
@@ -80,28 +77,31 @@ if menu == "仕訳入力":
 
         memo = st.text_input("摘要 (MEMO)")
         
-        # 借借一致のバリデーション
-        is_balanced = (st.session_state.deb_a > 0 and st.session_state.deb_a == st.session_state.cre_a)
+        # セッション状態から最新値を取得
+        d_val = st.session_state.get('deb_a', 0)
+        c_val = st.session_state.get('cre_a', 0)
+        is_balanced = (d_val > 0 and d_val == c_val)
         
         if st.button("リストに追加 (Add to list)", disabled=not is_balanced):
-            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, st.session_state.deb_a, credit_sub, st.session_state.cre_a, memo]], 
+            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, d_val, credit_sub, c_val, memo]], 
                                    columns=COLUMNS)
             st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
-            # 登録後にリセット
-            st.session_state.deb_a = 0
-            st.session_state.cre_a = 0
+            
+            # --- 【修正点】安全なリセット処理 ---
+            if 'deb_a' in st.session_state: st.session_state.deb_a = 0
+            if 'cre_a' in st.session_state: st.session_state.cre_a = 0
+            
             st.rerun()
             
     else:
         st.info("複数行仕訳モード：UI構築準備中")
 
-    # --- 表示セクション（新列名に対応） ---
+    # --- 送信待ち・履歴表示セクション（維持） ---
     st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
         cols_w = [1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0] 
         h = st.columns(cols_w)
         h[0].caption("日付"); h[1].caption("借方"); h[2].caption("金額"); h[3].caption("貸方"); h[4].caption("金額"); h[5].caption("摘要")
-
         for i, row in st.session_state.temp_journals.iterrows():
             c = st.columns(cols_w)
             vals = [row['日付'], row['借方'], f"{row['借方金額']:,}", row['貸方'], f"{row['貸方金額']:,}", row['摘要']]
@@ -115,7 +115,7 @@ if menu == "仕訳入力":
             final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
             g = Github(GITHUB_TOKEN)
             repo = g.get_repo(REPO_NAME)
-            repo.update_file(JOURNAL_FILE, "Final Dual-Amount Fix", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+            repo.update_file(JOURNAL_FILE, "Fix: Safe reset logic", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
             st.session_state.journals_df = final_df
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
@@ -127,7 +127,6 @@ if menu == "仕訳入力":
         th[0].caption("日付"); th[1].caption("借方"); th[2].caption("金額"); th[3].caption("貸方"); th[4].caption("金額"); th[5].caption("摘要")
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
             tr = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
-            # 列名が旧形式でも新形式でも安全に取得する処理
             d_amt = row.get('借方金額', row.get('金額', 0))
             c_amt = row.get('貸方金額', row.get('金額.1', d_amt))
             fields = [row['日付'], row['借方'], f"{d_amt:,}", row['貸方'], f"{c_amt:,}", row['摘要'] if pd.notna(row['摘要']) else '']
@@ -140,10 +139,3 @@ if menu == "仕訳入力":
                 repo.update_file(JOURNAL_FILE, "Delete row", updated_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
                 st.session_state.journals_df = updated_df
                 st.rerun()
-
-elif menu == "マスター確認":
-    st.header("MASTER DATA")
-    st.dataframe(st.session_state.master_df)
-elif menu == "財務諸表":
-    st.header("FINANCIAL STATEMENTS")
-    st.dataframe(pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True))
