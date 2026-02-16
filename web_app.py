@@ -4,7 +4,26 @@ from github import Github
 from datetime import datetime
 import io
 
-# --- 設定 & 接続 (変更なし) ---
+# --- CSS設定（長い文字を自動縮小し、ボタンを横に固定する） ---
+st.markdown("""
+    <style>
+    /* テキストが溢れる場合にフォントサイズを自動調整し、1行に収める */
+    .tight-text {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.9rem; /* 基本サイズ */
+    }
+    /* ボタンの文字が縦にならないように保護 */
+    div.stButton > button {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        min-width: 60px !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 設定 & 接続 ---
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO_NAME = "xufu732-coder/stack" 
 JOURNAL_FILE = "journal.csv"
@@ -30,7 +49,6 @@ account_list = st.session_state.master_df["勘定科目"].tolist() if not st.ses
 st.sidebar.title("MENU")
 menu = st.sidebar.radio("移動先", ["仕訳入力", "マスター確認", "財務諸表", "月次推移"])
 
-# 表示用統合データ
 all_data = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
 
 if menu == "仕訳入力":
@@ -55,21 +73,22 @@ if menu == "仕訳入力":
     # --- 送信待ちエリア ---
     st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
-        # 比率調整：右端(削除ボタン)を1.5に広げて横書きを確保
-        h_col = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
-        h_col[0].caption("日付")
-        h_col[1].caption("借方")
-        h_col[2].caption("貸方")
-        h_col[3].caption("金額")
-        h_col[4].caption("摘要")
+        # ボタン幅を確保するために比率を微調整
+        cols_w = [1.2, 2.3, 2.3, 1.2, 2, 1] 
+        h = st.columns(cols_w)
+        h[0].caption("日付")
+        h[1].caption("借方")
+        h[2].caption("貸方")
+        h[3].caption("金額")
+        h[4].caption("摘要")
 
         for i, row in st.session_state.temp_journals.iterrows():
-            c = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
-            c[0].text(row['日付'])
-            c[1].text(row['借方'])
-            c[2].text(row['貸方'])
-            c[3].text(f"{row['金額']:,}")
-            c[4].text(row['摘要'])
+            c = st.columns(cols_w)
+            c[0].write(f"<div class='tight-text'>{row['日付']}</div>", unsafe_allow_html=True)
+            c[1].write(f"<div class='tight-text'>{row['借方']}</div>", unsafe_allow_html=True)
+            c[2].write(f"<div class='tight-text'>{row['貸方']}</div>", unsafe_allow_html=True)
+            c[3].write(f"<div class='tight-text'>{row['金額']:,}</div>", unsafe_allow_html=True)
+            c[4].write(f"<div class='tight-text'>{row['摘要']}</div>", unsafe_allow_html=True)
             if c[5].button("消去", key=f"t_del_{i}"):
                 st.session_state.temp_journals = st.session_state.temp_journals.drop(i).reset_index(drop=True)
                 st.rerun()
@@ -89,19 +108,8 @@ if menu == "仕訳入力":
     
     # --- 履歴エリア ---
     st.subheader("保存済み履歴 (HISTORY)")
-    if st.button("【警告】全履歴削除"):
-        g = Github(GITHUB_TOKEN)
-        repo = g.get_repo(REPO_NAME)
-        empty_df = pd.DataFrame(columns=["日付", "借方", "金額", "貸方", "金額.1", "摘要"])
-        csv_content = empty_df.to_csv(index=False)
-        contents = repo.get_contents(JOURNAL_FILE)
-        repo.update_file(JOURNAL_FILE, "Reset", csv_content, contents.sha)
-        st.session_state.journals_df = empty_df
-        st.rerun()
-
     if not st.session_state.journals_df.empty:
-        # ヘッダー比率を送信待ちエリアと統一
-        th = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
+        th = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1])
         th[0].caption("日付")
         th[1].caption("借方")
         th[2].caption("貸方")
@@ -109,13 +117,12 @@ if menu == "仕訳入力":
         th[4].caption("摘要")
         
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
-            tr = st.columns([1.5, 2, 2, 1.5, 2.5, 1.5])
-            tr[0].text(row['日付'])
-            tr[1].text(row['借方'])
-            tr[2].text(row['貸方'])
-            tr[3].text(f"{row['金額']:,}")
-            tr[4].text(row['摘要'] if pd.notna(row['摘要']) else "")
-            # カラム幅 1.5 で「削除」の横並びを確保
+            tr = st.columns([1.2, 2.3, 2.3, 1.2, 2, 1])
+            tr[0].write(f"<div class='tight-text'>{row['日付']}</div>", unsafe_allow_html=True)
+            tr[1].write(f"<div class='tight-text'>{row['借方']}</div>", unsafe_allow_html=True)
+            tr[2].write(f"<div class='tight-text'>{row['貸方']}</div>", unsafe_allow_html=True)
+            tr[3].write(f"<div class='tight-text'>{row['金額']:,}</div>", unsafe_allow_html=True)
+            tr[4].write(f"<div class='tight-text'>{row['摘要'] if pd.notna(row['摘要']) else ''}</div>", unsafe_allow_html=True)
             if tr[5].button("削除", key=f"h_del_{i}"):
                 updated_df = st.session_state.journals_df.drop(i).reset_index(drop=True)
                 g = Github(GITHUB_TOKEN)
@@ -126,7 +133,6 @@ if menu == "仕訳入力":
                 st.session_state.journals_df = updated_df
                 st.rerun()
 
-# 他のメニューは枠組みを維持
 elif menu == "マスター確認":
     st.header("MASTER DATA")
     st.dataframe(st.session_state.master_df)
