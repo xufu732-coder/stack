@@ -18,7 +18,6 @@ def load_github_csv(file_name):
         return pd.read_csv(io.StringIO(contents.decoded_content.decode('utf-8')))
     except: return pd.DataFrame()
 
-# データの一元管理（これが無いと他の画面でデータが空になります）
 if 'master_df' not in st.session_state:
     st.session_state.master_df = load_github_csv(MASTER_FILE)
 if 'journals_df' not in st.session_state:
@@ -31,12 +30,10 @@ account_list = st.session_state.master_df["勘定科目"].tolist() if not st.ses
 st.sidebar.title("MENU")
 menu = st.sidebar.radio("移動先", ["仕訳入力", "マスター確認", "財務諸表", "月次推移"])
 
-# --- 表示用データの統合 ---
-# 履歴と一時保存を合わせたものを計算に使う
-display_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
-
 if menu == "仕訳入力":
-    st.header("📥 JOURNAL INPUT (サクサク入力モード)")
+    # ③アイコンの廃止
+    st.header("JOURNAL INPUT (サクサク入力モード)")
+    
     date = st.date_input("日付", value=datetime.now())
     col1, col2 = st.columns(2)
     with col1:
@@ -52,49 +49,73 @@ if menu == "仕訳入力":
                                    columns=st.session_state.temp_journals.columns)
             st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
             st.rerun()
-        else:
-            st.error("入力内容を確認してください")
 
-    st.subheader("📝 送信待ちの仕訳 (未保存)")
+    # ②仮記録済みの削除機能
+    st.subheader("送信待ちの仕訳 (未保存)")
     if not st.session_state.temp_journals.empty:
-        st.table(st.session_state.temp_journals)
+        # 個別削除用インデックス表示
+        for i, row in st.session_state.temp_journals.iterrows():
+            cols = st.columns([8, 1])
+            cols[0].write(f"{row['日付']} | {row['借方']} {row['金額']:,} / {row['貸方']} | {row['摘要']}")
+            if cols[1].button("消去", key=f"del_temp_{i}"):
+                st.session_state.temp_journals = st.session_state.temp_journals.drop(i).reset_index(drop=True)
+                st.rerun()
+
         if st.button("🚀 GitHubへ一括保存する (Save all to GitHub)"):
             with st.spinner("通信中..."):
                 final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
                 g = Github(GITHUB_TOKEN)
                 repo = g.get_repo(REPO_NAME)
                 csv_content = final_df.to_csv(index=False)
-                try:
-                    contents = repo.get_contents(JOURNAL_FILE)
-                    repo.update_file(JOURNAL_FILE, "Batch update", csv_content, contents.sha)
-                    st.session_state.journals_df = final_df
-                    st.session_state.temp_journals = pd.DataFrame(columns=st.session_state.temp_journals.columns)
-                    st.success("保存完了")
-                    st.rerun()
-                except Exception as e: st.error(f"失敗: {e}")
-    
+                contents = repo.get_contents(JOURNAL_FILE)
+                repo.update_file(JOURNAL_FILE, "Batch update", csv_content, contents.sha)
+                st.session_state.journals_df = final_df
+                st.session_state.temp_journals = pd.DataFrame(columns=st.session_state.temp_journals.columns)
+                st.rerun()
+        
+        # ②仮記録済みの全削除
+        if st.button("送信待ちリストを全削除"):
+            st.session_state.temp_journals = pd.DataFrame(columns=st.session_state.temp_journals.columns)
+            st.rerun()
+
     st.divider()
-    st.subheader("📖 保存済み履歴 (HISTORY)")
-    st.dataframe(st.session_state.journals_df.iloc[::-1], use_container_width=True)
+    
+    # ②記録済みの全削除
+    st.subheader("保存済み履歴 (HISTORY)")
+    if st.button("【警告】GitHub上の全履歴を削除"):
+        g = Github(GITHUB_TOKEN)
+        repo = g.get_repo(REPO_NAME)
+        empty_df = pd.DataFrame(columns=["日付", "借方", "金額", "貸方", "金額.1", "摘要"])
+        csv_content = empty_df.to_csv(index=False)
+        contents = repo.get_contents(JOURNAL_FILE)
+        repo.update_file(JOURNAL_FILE, "Delete all history", csv_content, contents.sha)
+        st.session_state.journals_df = empty_df
+        st.rerun()
 
+    # ①一番右の金額欄の廃止
+    if not st.session_state.journals_df.empty:
+        # 金額.1列を除外して表示
+        history_display = st.session_state.journals_df.drop(columns=["金額.1"])
+        
+        # ②記録済みの個別削除
+        for i, row in history_display.iloc[::-1].iterrows():
+            cols = st.columns([8, 1])
+            cols[0].dataframe(pd.DataFrame([row]), hide_index=True)
+            if cols[1].button("削除", key=f"del_hist_{i}"):
+                updated_df = st.session_state.journals_df.drop(i).reset_index(drop=True)
+                g = Github(GITHUB_TOKEN)
+                repo = g.get_repo(REPO_NAME)
+                csv_content = updated_df.to_csv(index=False)
+                contents = repo.get_contents(JOURNAL_FILE)
+                repo.update_file(JOURNAL_FILE, f"Delete row {i}", csv_content, contents.sha)
+                st.session_state.journals_df = updated_df
+                st.rerun()
+
+# マスター確認、財務諸表、月次推移の枠組みは維持
 elif menu == "マスター確認":
-    st.header("🗂️ MASTER DATA")
-    st.dataframe(st.session_state.master_df, use_container_width=True)
-
+    st.header("MASTER DATA")
+    st.dataframe(st.session_state.master_df)
 elif menu == "財務諸表":
-    st.header("📊 FINANCIAL STATEMENTS")
-    if not display_df.empty:
-        # ここに以前の財務諸表計算ロジックをそのまま記述します
-        # 修正：journals_df ではなく display_df を使うように変更
-        st.write("集計データ:")
-        st.dataframe(display_df)
-    else:
-        st.info("データがありません")
-
+    st.header("FINANCIAL STATEMENTS")
 elif menu == "月次推移":
-    st.header("📈 MONTHLY TREND")
-    if not display_df.empty:
-        st.write("推移データ:")
-        st.line_chart(display_df.set_index("日付")["金額"]) # 簡易的な表示例
-    else:
-        st.info("データがありません")
+    st.header("MONTHLY TREND")
