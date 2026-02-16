@@ -47,12 +47,11 @@ if menu == "仕訳入力":
         credit = st.selectbox("貸方科目 (CREDIT)", account_list)
         memo = st.text_input("摘要 (MEMO)")
     
-    # --- 仮登録ロジック (Enter/ボタンで即反応) ---
+    # --- 仮登録ロジック ---
     if st.button("リストに追加 (Add to list)"):
         if amount and amount > 0 and debit != credit:
             new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit, amount, credit, amount, memo]], 
                                    columns=st.session_state.temp_journals.columns)
-            # session_state(メモリ)に追加するだけなので一瞬で終わります
             st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
             st.rerun()
         else:
@@ -66,7 +65,6 @@ if menu == "仕訳入力":
         # --- ここで一括保存 ---
         if st.button("🚀 GitHubへ一括保存する (Save all to GitHub)"):
             with st.spinner("通信中..."):
-                # 既存のデータと合体
                 final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
                 
                 g = Github(GITHUB_TOKEN)
@@ -76,7 +74,6 @@ if menu == "仕訳入力":
                     contents = repo.get_contents(JOURNAL_FILE)
                     repo.update_file(JOURNAL_FILE, "Batch update journal", csv_content, contents.sha)
                     
-                    # 成功したらメモリを空にして本番データを更新
                     st.session_state.journals_df = final_df
                     st.session_state.temp_journals = pd.DataFrame(columns=st.session_state.temp_journals.columns)
                     st.success("GitHubへの一括保存が完了しました！")
