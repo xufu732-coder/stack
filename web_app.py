@@ -4,7 +4,7 @@ from github import Github
 from datetime import datetime
 import io
 
-# --- CSS設定（維持） ---
+# --- CSS設定 ---
 st.markdown("""
     <style>
     .tight-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; }
@@ -26,20 +26,20 @@ def load_github_csv(file_name):
         return pd.read_csv(io.StringIO(contents.decoded_content.decode('utf-8')))
     except: return pd.DataFrame()
 
-# 財務諸表対応の標準列（今後を見据えて金額を2列で保持）
 COLUMNS = ["日付", "借方", "借方金額", "貸方", "貸方金額", "摘要"]
 
 if 'journals_df' not in st.session_state:
     df = load_github_csv(JOURNAL_FILE)
-    # 読み込み時に列名が古い場合は変換（エラー防止）
     if not df.empty and "金額" in df.columns:
         df = df.rename(columns={"金額": "借方金額", "金額.1": "貸方金額"})
+    # 数値列を整数型に変換（NaNがある場合は0埋め）
+    for col in ["借方金額", "貸方金額"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
     st.session_state.journals_df = df if not df.empty else pd.DataFrame(columns=COLUMNS)
 
 if 'temp_journals' not in st.session_state:
     st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
-if 'multi_row_mode' not in st.session_state:
-    st.session_state.multi_row_mode = False
 
 account_list = load_github_csv(MASTER_FILE)["勘定科目"].tolist() if 'master_df' not in st.session_state else st.session_state.master_df["勘定科目"].tolist()
 
@@ -50,7 +50,6 @@ if menu == "仕訳入力":
     st.header("JOURNAL INPUT")
     date = st.date_input("日付", value=datetime.now())
 
-    # シンプルな入力欄（連動ロジックは削除しました）
     c1, c2, c3, c4 = st.columns(4)
     with c1:
         debit_sub = st.selectbox("借方科目", account_list, key="deb_s")
@@ -63,24 +62,34 @@ if menu == "仕訳入力":
 
     memo = st.text_input("摘要 (MEMO)")
     
-    # どちらも0より大きければ追加可能（左右一致の縛りは忘れました）
     if st.button("リストに追加 (Add to list)"):
         if debit_amt > 0 or credit_amt > 0:
-            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, debit_amt, credit_sub, credit_amt, memo]], 
+            # 整数として保存
+            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), debit_sub, int(debit_amt), credit_sub, int(credit_amt), memo]], 
                                    columns=COLUMNS)
             st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
-            # エラーの原因となる直接代入（リセット）を廃止し、単純なリロードで対応
             st.rerun()
 
-    # --- 送信待ちエリア（表示の安定化） ---
-    st.subheader("送信待ちの仕訳 (未保存)")
+    # --- 送信待ちエリア ---
+    st.divider()
+    col_sub1, col_sub2 = st.columns([3, 1])
+    with col_sub1:
+        st.subheader("送信待ちの仕訳 (未保存)")
+    with col_sub2:
+        # 全削除機能の復活
+        if not st.session_state.temp_journals.empty:
+            if st.button("🗑️ リストを全削除", use_container_width=True):
+                st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
+                st.rerun()
+
     if not st.session_state.temp_journals.empty:
         cols_w = [1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0] 
         h = st.columns(cols_w)
         h[0].caption("日付"); h[1].caption("借方"); h[2].caption("借方額"); h[3].caption("貸方"); h[4].caption("貸方額"); h[5].caption("摘要")
         for i, row in st.session_state.temp_journals.iterrows():
             c = st.columns(cols_w)
-            vals = [row['日付'], row['借方'], f"{row['借方金額']:,}", row['貸方'], f"{row['貸方金額']:,}", row['摘要']]
+            # 小数点なしの表示
+            vals = [row['日付'], row['借方'], f"{int(row['借方金額']):,}", row['貸方'], f"{int(row['貸方金額']):,}", row['摘要']]
             for idx, val in enumerate(vals):
                 c[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
             if c[6].button("消去", key=f"t_del_{i}"):
@@ -88,14 +97,19 @@ if menu == "仕訳入力":
                 st.rerun()
         
         if st.button("🚀 GitHubへ一括保存する"):
+            # 保存前にもう一度整数を保証
+            st.session_state.temp_journals["借方金額"] = st.session_state.temp_journals["借方金額"].astype(int)
+            st.session_state.temp_journals["貸方金額"] = st.session_state.temp_journals["貸方金額"].astype(int)
+            
             final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
             g = Github(GITHUB_TOKEN)
             repo = g.get_repo(REPO_NAME)
-            repo.update_file(JOURNAL_FILE, "Update data structure", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+            repo.update_file(JOURNAL_FILE, "Integer fix and Batch update", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
             st.session_state.journals_df = final_df
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
 
+    # --- 履歴表示（ここも整数化） ---
     st.divider()
     st.subheader("保存済み履歴 (HISTORY)")
     if not st.session_state.journals_df.empty:
@@ -103,8 +117,8 @@ if menu == "仕訳入力":
         th[0].caption("日付"); th[1].caption("借方"); th[2].caption("借方額"); th[3].caption("貸方"); th[4].caption("貸方額"); th[5].caption("摘要")
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
             tr = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
-            d_amt = row.get('借方金額', 0)
-            c_amt = row.get('貸方金額', 0)
+            d_amt = int(row.get('借方金額', 0))
+            c_amt = int(row.get('貸方金額', 0))
             fields = [row['日付'], row['借方'], f"{d_amt:,}", row['貸方'], f"{c_amt:,}", row['摘要'] if pd.notna(row['摘要']) else '']
             for idx, val in enumerate(fields):
                 tr[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
@@ -118,4 +132,4 @@ if menu == "仕訳入力":
 
 elif menu == "マスター確認":
     st.header("MASTER DATA")
-    st.dataframe(st.session_state.journals_df) # 安全のため一時的に journalsを表示
+    st.dataframe(st.session_state.journals_df)
