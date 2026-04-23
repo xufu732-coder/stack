@@ -37,69 +37,63 @@ if 'journals_df' not in st.session_state:
 if 'temp_journals' not in st.session_state:
     st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
 
-# 入力行の管理（初期値は空文字にして、選択を促す）
+# 現在の入力行（セット）を管理する状態
 if 'entry_sets' not in st.session_state:
     st.session_state.entry_sets = [{"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0}]
 
 master_df = load_github_csv(MASTER_FILE)
-# 選択肢の先頭に空文字を追加して「未選択」状態を作れるようにする
-account_list = [""] + master_df["勘定科目"].tolist() if not master_df.empty else [""]
+account_list = master_df["勘定科目"].tolist() if not master_df.empty else []
 
 st.sidebar.title("MENU")
 menu = st.sidebar.radio("移動先", ["仕訳入力", "マスター確認", "財務諸表", "月次推移"])
 
 if menu == "仕訳入力":
     st.header("JOURNAL INPUT")
-    # 日付は一番上に一つだけ（全行共通）
     date = st.date_input("日付", value=datetime.now())
 
+    # --- 仕訳入力欄（動的追加対応） ---
     current_entries = []
     total_deb = 0
     total_cre = 0
 
     for i, entry in enumerate(st.session_state.entry_sets):
         c1, c2, c3, c4 = st.columns(4)
-        
-        # 1行目（i=0）のみラベルを表示し、2行目以降はラベルを隠す
-        d_label = "借方科目" if i == 0 else ""
-        da_label = "借方金額" if i == 0 else ""
-        c_label = "貸方科目" if i == 0 else ""
-        ca_label = "貸方金額" if i == 0 else ""
-
         with c1:
             d_idx = account_list.index(entry["deb_s"]) if entry["deb_s"] in account_list else 0
-            deb_s = st.selectbox(d_label, account_list, index=d_idx, key=f"deb_s_{i}")
+            deb_s = st.selectbox("借方科目", account_list, index=d_idx, key=f"deb_s_{i}")
         with c2:
-            deb_a = st.number_input(da_label, min_value=0, step=1, value=int(entry["deb_a"]), key=f"deb_a_{i}")
+            deb_a = st.number_input("借方金額", min_value=0, step=1, value=int(entry["deb_a"]), key=f"deb_a_{i}")
         with c3:
             c_idx = account_list.index(entry["cre_s"]) if entry["cre_s"] in account_list else 0
-            cre_s = st.selectbox(c_label, account_list, index=c_idx, key=f"cre_s_{i}")
+            cre_s = st.selectbox("貸方科目", account_list, index=c_idx, key=f"cre_s_{i}")
         with c4:
-            cre_a = st.number_input(ca_label, min_value=0, step=1, value=int(entry["cre_a"]), key=f"cre_a_{i}")
+            cre_a = st.number_input("貸方金額", min_value=0, step=1, value=int(entry["cre_a"]), key=f"cre_a_{i}")
         
         current_entries.append({"deb_s": deb_s, "deb_a": deb_a, "cre_s": cre_s, "cre_a": cre_a})
         total_deb += deb_a
         total_cre += cre_a
 
+    # セッション状態を更新
     st.session_state.entry_sets = current_entries
 
+    # 行追加ボタン（画像イメージを損なわないようシンプルに配置）
     if st.button("＋ 行を追加"):
-        # 追加行は勘定科目を空("")にする
         st.session_state.entry_sets.append({"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0})
         st.rerun()
 
     memo = st.text_input("摘要 (MEMO)")
 
-    # 合計と差額の表示
-    diff = total_deb - total_cre
-    st.write(f"借方合計: {total_deb:,} / 貸方合計: {total_cre:,} (差額: {diff:,})")
+    # 金額一致の判定と表示
+    if len(st.session_state.entry_sets) > 1:
+        diff = total_deb - total_cre
+        st.write(f"借方合計: {total_deb:,} / 貸方合計: {total_cre:,} (差額: {diff:,})")
 
+    # 登録ロジック
     if st.button("リストに追加"):
-        # バリデーション：合計一致かつ、何かしら入力があること
-        if total_deb == total_cre and total_deb > 0:
+        # 合計が一致しているか、または単一行で金額が入っているか
+        if (total_deb == total_cre and total_deb > 0):
             for entry in st.session_state.entry_sets:
-                # 科目または金額が入っている行のみデータ化
-                if entry["deb_s"] != "" or entry["cre_s"] != "" or entry["deb_a"] > 0 or entry["cre_a"] > 0:
+                if entry["deb_a"] > 0 or entry["cre_a"] > 0:
                     new_row = pd.DataFrame([[
                         date.strftime('%Y-%m-%d'), 
                         entry["deb_s"], int(entry["deb_a"]), 
@@ -108,11 +102,68 @@ if menu == "仕訳入力":
                     ]], columns=COLUMNS)
                     st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
             
+            # 入力欄をリセット（1行に戻す）
             st.session_state.entry_sets = [{"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0}]
             st.rerun()
         else:
             st.warning("借方と貸方の合計金額を一致させてください。")
 
-    # --- 送信待ちエリア & 履歴表示（以前のコードを維持） ---
+    # --- 送信待ちエリア ---
     st.divider()
-    # (以下、以前のコードと同じため省略)
+    col_t1, col_t2 = st.columns([3, 1])
+    with col_t1: st.subheader("送信待ちの仕訳")
+    with col_t2:
+        if not st.session_state.temp_journals.empty:
+            if st.button("リストを全削除"):
+                st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
+                st.rerun()
+
+    if not st.session_state.temp_journals.empty:
+        cols_w = [1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0] 
+        h = st.columns(cols_w)
+        for idx, text in enumerate(["日付", "借方", "借方額", "貸方", "貸方額", "摘要"]): h[idx].caption(text)
+        for i, row in st.session_state.temp_journals.iterrows():
+            c = st.columns(cols_w)
+            vals = [row['日付'], row['借方'], f"{int(row['借方金額']):,}", row['貸方'], f"{int(row['貸方金額']):,}", row['摘要']]
+            for idx, val in enumerate(vals): c[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
+            if c[6].button("消去", key=f"t_del_{i}"):
+                st.session_state.temp_journals = st.session_state.temp_journals.drop(i).reset_index(drop=True)
+                st.rerun()
+        
+        if st.button("GitHubへ一括保存する"):
+            final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
+            g = Github(GITHUB_TOKEN)
+            repo = g.get_repo(REPO_NAME)
+            repo.update_file(JOURNAL_FILE, "Add entries", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+            st.session_state.journals_df = final_df
+            st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
+            st.rerun()
+
+    # --- 保存済み履歴（維持） ---
+    st.divider()
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1: st.subheader("保存済み履歴")
+    if not st.session_state.journals_df.empty:
+        th = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
+        for idx, text in enumerate(["日付", "借方", "借方額", "貸方", "貸方額", "摘要"]): th[idx].caption(text)
+        for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
+            tr = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
+            d_amt, c_amt = int(row.get('借方金額', 0)), int(row.get('貸方金額', 0))
+            fields = [row['日付'], row['借方'], f"{d_amt:,}", row['貸方'], f"{c_amt:,}", row['摘要'] if pd.notna(row['摘要']) else '']
+            for idx, val in enumerate(fields): tr[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
+            if tr[6].button("削除", key=f"h_del_{i}"):
+                updated_df = st.session_state.journals_df.drop(i).reset_index(drop=True)
+                g = Github(GITHUB_TOKEN)
+                repo = g.get_repo(REPO_NAME)
+                repo.update_file(JOURNAL_FILE, "Delete row", updated_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+                st.session_state.journals_df = updated_df
+                st.rerun()
+
+elif menu == "マスター確認":
+    st.header("MASTER DATA")
+    if not master_df.empty:
+        m_cols = st.columns(3)
+        for i, row in master_df.iterrows():
+            with m_cols[i % 3]:
+                with st.expander(f"{row['勘定科目']}"):
+                    st.markdown(f"<div style='font-size: 0.85rem;'>■分類: {row['分類']}<br>■詳細: {row['詳細分類']}<br>■方向: {row['計算方向']}<br>■コード: {row['コード(参考)']}</div>", unsafe_allow_html=True)
