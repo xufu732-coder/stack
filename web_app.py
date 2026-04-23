@@ -4,7 +4,7 @@ from github import Github
 from datetime import datetime
 import io
 
-# --- CSS設定（維持） ---
+# --- CSS設定（以前のタイトなレイアウト） ---
 st.markdown("""
     <style>
     .tight-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; }
@@ -37,10 +37,6 @@ if 'journals_df' not in st.session_state:
 if 'temp_journals' not in st.session_state:
     st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
 
-# 初期状態を「1行分（借方・貸方のセット）」に修正
-if 'input_rows' not in st.session_state:
-    st.session_state.input_rows = [{"side": "借方", "account": "", "amount": 0}, {"side": "貸方", "account": "", "amount": 0}]
-
 master_df = load_github_csv(MASTER_FILE)
 account_list = master_df["勘定科目"].tolist() if not master_df.empty else []
 
@@ -49,61 +45,28 @@ menu = st.sidebar.radio("移動先", ["仕訳入力", "マスター確認", "財
 
 if menu == "仕訳入力":
     st.header("JOURNAL INPUT")
-    
     date = st.date_input("日付", value=datetime.now())
+
+    # シンプルな1行入力（これまでの基本形）
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        deb_sub = st.selectbox("借方科目", account_list, key="deb_s")
+    with c2:
+        deb_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a")
+    with c3:
+        cre_sub = st.selectbox("貸方科目", account_list, key="cre_s")
+    with c4:
+        cre_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a")
+
     memo = st.text_input("摘要 (MEMO)")
-
-    st.write("--- 仕訳入力 ---")
     
-    new_input_rows = []
-    deb_total = 0
-    cre_total = 0
+    if st.button("リストに追加"):
+        if deb_amt > 0 or cre_amt > 0:
+            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), deb_sub, int(deb_amt), cre_sub, int(cre_amt), memo]], columns=COLUMNS)
+            st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
+            st.rerun()
 
-    for i, row_data in enumerate(st.session_state.input_rows):
-        c1, c2, c3, c4 = st.columns([1, 2, 2, 0.5])
-        with c1:
-            side = st.selectbox("貸借", ["借方", "貸方"], index=0 if row_data["side"]=="借方" else 1, key=f"side_{i}")
-        with c2:
-            default_idx = account_list.index(row_data["account"]) if row_data["account"] in account_list else 0
-            acc = st.selectbox("勘定科目", account_list, index=default_idx, key=f"acc_{i}")
-        with c3:
-            amt = st.number_input("金額", min_value=0, step=1, value=int(row_data["amount"]), key=f"amt_{i}")
-        with c4:
-            # 1セット（2要素）より多い場合のみ削除ボタンを表示
-            if len(st.session_state.input_rows) > 2:
-                if st.button("×", key=f"del_row_{i}"):
-                    st.session_state.input_rows.pop(i)
-                    st.rerun()
-        
-        new_input_rows.append({"side": side, "account": acc, "amount": amt})
-        if side == "借方": deb_total += amt
-        else: cre_total += amt
-
-    st.session_state.input_rows = new_input_rows
-
-    if st.button("+ 行を追加"):
-        st.session_state.input_rows.append({"side": "借方", "account": account_list[0], "amount": 0})
-        st.rerun()
-
-    diff = deb_total - cre_total
-    st.markdown(f"**借方合計: {deb_total:,} / 貸方合計: {cre_total:,} (差額: {diff:,})**")
-
-    if st.button("リストに登録", disabled=(deb_total != cre_total or deb_total == 0)):
-        for row in st.session_state.input_rows:
-            if row["amount"] > 0:
-                d_sub = row["account"] if row["side"] == "借方" else ""
-                d_amt = row["amount"] if row["side"] == "借方" else 0
-                c_sub = row["account"] if row["side"] == "貸方" else ""
-                c_amt = row["amount"] if row["side"] == "貸方" else 0
-                
-                new_entry = pd.DataFrame([[date.strftime('%Y-%m-%d'), d_sub, int(d_amt), c_sub, int(c_amt), memo]], columns=COLUMNS)
-                st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_entry], ignore_index=True)
-        
-        # 登録後は初期の1セットに戻す
-        st.session_state.input_rows = [{"side": "借方", "account": "", "amount": 0}, {"side": "貸方", "account": "", "amount": 0}]
-        st.rerun()
-
-    # --- 送信待ちエリア（維持） ---
+    # --- 送信待ちエリア ---
     st.divider()
     col_t1, col_t2 = st.columns([3, 1])
     with col_t1: st.subheader("送信待ちの仕訳")
@@ -129,12 +92,12 @@ if menu == "仕訳入力":
             final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
             g = Github(GITHUB_TOKEN)
             repo = g.get_repo(REPO_NAME)
-            repo.update_file(JOURNAL_FILE, "Batch update rows", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+            repo.update_file(JOURNAL_FILE, "Restore to stable version", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
             st.session_state.journals_df = final_df
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
 
-    # --- 保存済み履歴（維持） ---
+    # --- 保存済み履歴 ---
     st.divider()
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1: st.subheader("保存済み履歴")
