@@ -37,7 +37,7 @@ if 'journals_df' not in st.session_state:
 if 'temp_journals' not in st.session_state:
     st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
 
-# 現在入力中の行データを保持するバッファ（デフォルトで1行分）
+# 初期状態を「1行分（借方・貸方のセット）」に修正
 if 'input_rows' not in st.session_state:
     st.session_state.input_rows = [{"side": "借方", "account": "", "amount": 0}, {"side": "貸方", "account": "", "amount": 0}]
 
@@ -55,7 +55,6 @@ if menu == "仕訳入力":
 
     st.write("--- 仕訳入力 ---")
     
-    # 借方・貸方の行を動的に生成
     new_input_rows = []
     deb_total = 0
     cre_total = 0
@@ -65,13 +64,12 @@ if menu == "仕訳入力":
         with c1:
             side = st.selectbox("貸借", ["借方", "貸方"], index=0 if row_data["side"]=="借方" else 1, key=f"side_{i}")
         with c2:
-            # 前回の選択値を保持しつつセレクトボックス作成
             default_idx = account_list.index(row_data["account"]) if row_data["account"] in account_list else 0
             acc = st.selectbox("勘定科目", account_list, index=default_idx, key=f"acc_{i}")
         with c3:
             amt = st.number_input("金額", min_value=0, step=1, value=int(row_data["amount"]), key=f"amt_{i}")
         with c4:
-            # 行削除ボタン（2行以上ある場合のみ）
+            # 1セット（2要素）より多い場合のみ削除ボタンを表示
             if len(st.session_state.input_rows) > 2:
                 if st.button("×", key=f"del_row_{i}"):
                     st.session_state.input_rows.pop(i)
@@ -81,21 +79,16 @@ if menu == "仕訳入力":
         if side == "借方": deb_total += amt
         else: cre_total += amt
 
-    # 入力内容を更新
     st.session_state.input_rows = new_input_rows
 
-    # 行追加ボタン
     if st.button("+ 行を追加"):
         st.session_state.input_rows.append({"side": "借方", "account": account_list[0], "amount": 0})
         st.rerun()
 
-    # 合計表示とバリデーション
     diff = deb_total - cre_total
     st.markdown(f"**借方合計: {deb_total:,} / 貸方合計: {cre_total:,} (差額: {diff:,})**")
 
-    # 登録ボタン（金額一致が条件）
     if st.button("リストに登録", disabled=(deb_total != cre_total or deb_total == 0)):
-        # 入力バッファを仕訳データ形式に変換
         for row in st.session_state.input_rows:
             if row["amount"] > 0:
                 d_sub = row["account"] if row["side"] == "借方" else ""
@@ -106,12 +99,11 @@ if menu == "仕訳入力":
                 new_entry = pd.DataFrame([[date.strftime('%Y-%m-%d'), d_sub, int(d_amt), c_sub, int(c_amt), memo]], columns=COLUMNS)
                 st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_entry], ignore_index=True)
         
-        # 入力欄のリセット（初期状態の2行に戻す）
+        # 登録後は初期の1セットに戻す
         st.session_state.input_rows = [{"side": "借方", "account": "", "amount": 0}, {"side": "貸方", "account": "", "amount": 0}]
         st.rerun()
 
-    # --- 送信待ちエリア ---
-    # (これ以降の「送信待ちの仕訳」と「保存済み履歴」は以前のコードを維持)
+    # --- 送信待ちエリア（維持） ---
     st.divider()
     col_t1, col_t2 = st.columns([3, 1])
     with col_t1: st.subheader("送信待ちの仕訳")
@@ -142,7 +134,7 @@ if menu == "仕訳入力":
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
 
-    # --- 保存済み履歴 ---
+    # --- 保存済み履歴（維持） ---
     st.divider()
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1: st.subheader("保存済み履歴")
@@ -173,7 +165,6 @@ if menu == "仕訳入力":
                 st.rerun()
 
 elif menu == "マスター確認":
-    # 以前のマスター表示コードを維持
     st.header("MASTER DATA")
     if not master_df.empty:
         m_cols = st.columns(3)
