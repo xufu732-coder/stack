@@ -4,7 +4,7 @@ from github import Github
 from datetime import datetime
 import io
 
-# --- CSS設定（以前のタイトなレイアウト） ---
+# --- CSS設定（維持） ---
 st.markdown("""
     <style>
     .tight-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.9rem; }
@@ -37,6 +37,10 @@ if 'journals_df' not in st.session_state:
 if 'temp_journals' not in st.session_state:
     st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
 
+# 現在の入力行（セット）を管理する状態
+if 'entry_sets' not in st.session_state:
+    st.session_state.entry_sets = [{"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0}]
+
 master_df = load_github_csv(MASTER_FILE)
 account_list = master_df["勘定科目"].tolist() if not master_df.empty else []
 
@@ -47,24 +51,62 @@ if menu == "仕訳入力":
     st.header("JOURNAL INPUT")
     date = st.date_input("日付", value=datetime.now())
 
-    # シンプルな1行入力（これまでの基本形）
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        deb_sub = st.selectbox("借方科目", account_list, key="deb_s")
-    with c2:
-        deb_amt = st.number_input("借方金額", min_value=0, step=1, key="deb_a")
-    with c3:
-        cre_sub = st.selectbox("貸方科目", account_list, key="cre_s")
-    with c4:
-        cre_amt = st.number_input("貸方金額", min_value=0, step=1, key="cre_a")
+    # --- 仕訳入力欄（動的追加対応） ---
+    current_entries = []
+    total_deb = 0
+    total_cre = 0
+
+    for i, entry in enumerate(st.session_state.entry_sets):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            d_idx = account_list.index(entry["deb_s"]) if entry["deb_s"] in account_list else 0
+            deb_s = st.selectbox("借方科目", account_list, index=d_idx, key=f"deb_s_{i}")
+        with c2:
+            deb_a = st.number_input("借方金額", min_value=0, step=1, value=int(entry["deb_a"]), key=f"deb_a_{i}")
+        with c3:
+            c_idx = account_list.index(entry["cre_s"]) if entry["cre_s"] in account_list else 0
+            cre_s = st.selectbox("貸方科目", account_list, index=c_idx, key=f"cre_s_{i}")
+        with c4:
+            cre_a = st.number_input("貸方金額", min_value=0, step=1, value=int(entry["cre_a"]), key=f"cre_a_{i}")
+        
+        current_entries.append({"deb_s": deb_s, "deb_a": deb_a, "cre_s": cre_s, "cre_a": cre_a})
+        total_deb += deb_a
+        total_cre += cre_a
+
+    # セッション状態を更新
+    st.session_state.entry_sets = current_entries
+
+    # 行追加ボタン（画像イメージを損なわないようシンプルに配置）
+    if st.button("＋ 行を追加"):
+        st.session_state.entry_sets.append({"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0})
+        st.rerun()
 
     memo = st.text_input("摘要 (MEMO)")
-    
+
+    # 金額一致の判定と表示
+    if len(st.session_state.entry_sets) > 1:
+        diff = total_deb - total_cre
+        st.write(f"借方合計: {total_deb:,} / 貸方合計: {total_cre:,} (差額: {diff:,})")
+
+    # 登録ロジック
     if st.button("リストに追加"):
-        if deb_amt > 0 or cre_amt > 0:
-            new_row = pd.DataFrame([[date.strftime('%Y-%m-%d'), deb_sub, int(deb_amt), cre_sub, int(cre_amt), memo]], columns=COLUMNS)
-            st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
+        # 合計が一致しているか、または単一行で金額が入っているか
+        if (total_deb == total_cre and total_deb > 0):
+            for entry in st.session_state.entry_sets:
+                if entry["deb_a"] > 0 or entry["cre_a"] > 0:
+                    new_row = pd.DataFrame([[
+                        date.strftime('%Y-%m-%d'), 
+                        entry["deb_s"], int(entry["deb_a"]), 
+                        entry["cre_s"], int(entry["cre_a"]), 
+                        memo
+                    ]], columns=COLUMNS)
+                    st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
+            
+            # 入力欄をリセット（1行に戻す）
+            st.session_state.entry_sets = [{"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0}]
             st.rerun()
+        else:
+            st.warning("借方と貸方の合計金額を一致させてください。")
 
     # --- 送信待ちエリア ---
     st.divider()
@@ -92,25 +134,15 @@ if menu == "仕訳入力":
             final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
             g = Github(GITHUB_TOKEN)
             repo = g.get_repo(REPO_NAME)
-            repo.update_file(JOURNAL_FILE, "Restore to stable version", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
+            repo.update_file(JOURNAL_FILE, "Add entries", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
             st.session_state.journals_df = final_df
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
 
-    # --- 保存済み履歴 ---
+    # --- 保存済み履歴（維持） ---
     st.divider()
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1: st.subheader("保存済み履歴")
-    with col_h2:
-        if not st.session_state.journals_df.empty:
-            if st.button("履歴を全削除"):
-                empty_df = pd.DataFrame(columns=COLUMNS)
-                g = Github(GITHUB_TOKEN)
-                repo = g.get_repo(REPO_NAME)
-                repo.update_file(JOURNAL_FILE, "Full reset", empty_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
-                st.session_state.journals_df = empty_df
-                st.rerun()
-
     if not st.session_state.journals_df.empty:
         th = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
         for idx, text in enumerate(["日付", "借方", "借方額", "貸方", "貸方額", "摘要"]): th[idx].caption(text)
