@@ -60,7 +60,6 @@ if menu == "仕訳入力":
     for i, entry in enumerate(st.session_state.entry_sets):
         c1, c2, c3, c4 = st.columns(4)
         
-        # 1行目のみラベルを表示
         d_label = "借方科目" if i == 0 else ""
         da_label = "借方金額" if i == 0 else ""
         c_label = "貸方科目" if i == 0 else ""
@@ -94,22 +93,26 @@ if menu == "仕訳入力":
 
     if st.button("リストに追加"):
         if total_deb == total_cre and total_deb > 0:
+            new_rows = []
             for entry in st.session_state.entry_sets:
                 if entry["deb_s"] != "" or entry["cre_s"] != "" or entry["deb_a"] > 0 or entry["cre_a"] > 0:
-                    new_row = pd.DataFrame([[
+                    new_rows.append([
                         date.strftime('%Y-%m-%d'), 
                         entry["deb_s"], int(entry["deb_a"]), 
                         entry["cre_s"], int(entry["cre_a"]), 
                         memo
-                    ]], columns=COLUMNS)
-                    st.session_state.temp_journals = pd.concat([st.session_state.temp_journals, new_row], ignore_index=True)
+                    ])
+            
+            # 送信待ちリストの「先頭」に追加（逆時系列）
+            new_df = pd.DataFrame(new_rows, columns=COLUMNS)
+            st.session_state.temp_journals = pd.concat([new_df, st.session_state.temp_journals], ignore_index=True)
             
             st.session_state.entry_sets = [{"deb_s": "", "deb_a": 0, "cre_s": "", "cre_a": 0}]
             st.rerun()
         else:
             st.warning("借方と貸方の合計金額を一致させてください。")
 
-    # --- 送信待ちエリア（完全復旧） ---
+    # --- 送信待ちエリア ---
     st.divider()
     col_t1, col_t2 = st.columns([3, 1])
     with col_t1: st.subheader("送信待ちの仕訳")
@@ -123,16 +126,22 @@ if menu == "仕訳入力":
         cols_w = [1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0] 
         h = st.columns(cols_w)
         for idx, text in enumerate(["日付", "借方", "借方額", "貸方", "貸方額", "摘要"]): h[idx].caption(text)
+        
         for i, row in st.session_state.temp_journals.iterrows():
             c = st.columns(cols_w)
-            vals = [row['日付'], row['借方'], f"{int(row['借方金額']):,}", row['貸方'], f"{int(row['貸方金額']):,}", row['摘要']]
+            # 0の場合は空欄にする
+            d_val = f"{int(row['借方金額']):,}" if row['借方金額'] > 0 else ""
+            c_val = f"{int(row['貸方金額']):,}" if row['貸方金額'] > 0 else ""
+            
+            vals = [row['日付'], row['借方'], d_val, row['貸方'], c_val, row['摘要']]
             for idx, val in enumerate(vals): c[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
             if c[6].button("消去", key=f"t_del_{i}"):
                 st.session_state.temp_journals = st.session_state.temp_journals.drop(i).reset_index(drop=True)
                 st.rerun()
         
         if st.button("GitHubへ一括保存する"):
-            final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals], ignore_index=True)
+            # 保存時は本来の時系列（古い順）で結合
+            final_df = pd.concat([st.session_state.journals_df, st.session_state.temp_journals.iloc[::-1]], ignore_index=True)
             g = Github(GITHUB_TOKEN)
             repo = g.get_repo(REPO_NAME)
             repo.update_file(JOURNAL_FILE, "Update journal", final_df.to_csv(index=False), repo.get_contents(JOURNAL_FILE).sha)
@@ -140,7 +149,7 @@ if menu == "仕訳入力":
             st.session_state.temp_journals = pd.DataFrame(columns=COLUMNS)
             st.rerun()
 
-    # --- 保存済み履歴（完全復旧） ---
+    # --- 保存済み履歴 ---
     st.divider()
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1: st.subheader("保存済み履歴")
@@ -157,10 +166,15 @@ if menu == "仕訳入力":
     if not st.session_state.journals_df.empty:
         th = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
         for idx, text in enumerate(["日付", "借方", "借方額", "貸方", "貸方額", "摘要"]): th[idx].caption(text)
+        
+        # 保存済み履歴を逆時系列（最新が上）で表示
         for i, row in st.session_state.journals_df.iloc[::-1].iterrows():
             tr = st.columns([1.2, 2.0, 1.0, 2.0, 1.0, 1.8, 1.0])
-            d_amt, c_amt = int(row.get('借方金額', 0)), int(row.get('貸方金額', 0))
-            fields = [row['日付'], row['借方'], f"{d_amt:,}", row['貸方'], f"{c_amt:,}", row['摘要'] if pd.notna(row['摘要']) else '']
+            # 0の場合は空欄にする
+            d_amt = f"{int(row.get('借方金額', 0)):,}" if row.get('借方金額', 0) > 0 else ""
+            c_amt = f"{int(row.get('貸方金額', 0)):,}" if row.get('貸方金額', 0) > 0 else ""
+            
+            fields = [row['日付'], row['借方'], d_amt, row['貸方'], c_amt, row['摘要'] if pd.notna(row['摘要']) else '']
             for idx, val in enumerate(fields): tr[idx].write(f"<div class='tight-text'>{val}</div>", unsafe_allow_html=True)
             if tr[6].button("削除", key=f"h_del_{i}"):
                 updated_df = st.session_state.journals_df.drop(i).reset_index(drop=True)
