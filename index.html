@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>経営シミュレーション｜仕訳で会社を経営する簿記ゲーム</title>
+  <meta name="description" content="仕訳カードを選んで会社を12ヶ月経営する簿記シミュレーションゲーム。売上・仕入・借入・設備投資など簿記2級レベルの仕訳を体験しながら、財務諸表と経営指標で評価されます。">
+  <meta name="keywords" content="簿記ゲーム, 経営シミュレーション, 仕訳, 財務諸表, 貸借対照表, 損益計算書, 簿記2級, 会計ゲーム, 簿記学習">
+  <meta name="author" content="">
+  <meta property="og:title" content="経営シミュレーション｜仕訳で会社を経営する簿記ゲーム">
+  <meta property="og:description" content="仕訳カードを選んで会社を12ヶ月経営する簿記シミュレーションゲーム。簿記2級レベルの仕訳を体験しながら財務諸表を作ろう。">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="経営シミュレーション｜仕訳で会社を経営する簿記ゲーム">
+  <meta name="twitter:description" content="仕訳カードを選んで会社を12ヶ月経営する簿記シミュレーションゲーム。簿記2級レベルの仕訳を体験しながら財務諸表を作ろう。">
+  <link rel="canonical" href="https://deluxe-beijinho-c71551.netlify.app">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ヘッダー -->
+<header>
+  <h1>📊 経営シミュレーション</h1>
+  <div class="header-info">
+    <span>💰 現金 <strong id="hdr-cash">10,000千円</strong></span>
+    <span>📅 <strong id="hdr-turn">1月</strong> / 12月</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- 左：財務状態 -->
+  <div class="panel finance-col">
+    <div class="panel-title">📂 財務状態</div>
+
+    <div class="section-divider">■ 資産</div>
+    <div class="kpi-row"><span class="kpi-label">現金</span><span class="kpi-value neutral" id="fin-cash">10,000千円</span></div>
+    <div class="kpi-row"><span class="kpi-label">売掛金</span><span class="kpi-value neutral" id="fin-ar">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">商品在庫</span><span class="kpi-value neutral" id="fin-inv">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">固定資産（純額）</span><span class="kpi-value neutral" id="fin-fa">0円</span></div>
+
+    <div class="section-divider">■ 負債</div>
+    <div class="kpi-row"><span class="kpi-label">買掛金</span><span class="kpi-value neutral" id="fin-ap">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">短期借入金</span><span class="kpi-value neutral" id="fin-stl">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">長期借入金</span><span class="kpi-value neutral" id="fin-ltl">0円</span></div>
+
+    <div class="section-divider">■ 純資産</div>
+    <div class="kpi-row"><span class="kpi-label">資本金</span><span class="kpi-value neutral" id="fin-cap">10,000千円</span></div>
+    <div class="kpi-row"><span class="kpi-label">利益剰余金</span><span class="kpi-value neutral" id="fin-re">0円</span></div>
+
+    <div class="section-divider">■ 損益（累計）</div>
+    <div class="kpi-row"><span class="kpi-label">売上</span><span class="kpi-value positive" id="fin-sales">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">売上原価</span><span class="kpi-value negative" id="fin-cogs">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">販管費</span><span class="kpi-value negative" id="fin-sga">0円</span></div>
+    <div class="kpi-row"><span class="kpi-label">当期純利益</span><span class="kpi-value positive" id="fin-ni">0円</span></div>
+
+    <div class="panel-title" style="margin-top:14px;">⏳ 未決済一覧</div>
+    <div id="pending-list">
+      <div class="empty-note">未決済はありません</div>
+    </div>
+
+    <!-- 有価証券保有パネル -->
+    <div id="securities-panel" style="display:none;">
+      <div class="panel-title" style="margin-top:14px;">📈 保有有価証券</div>
+      <div id="securities-list"></div>
+    </div>
+  </div>
+
+  <!-- 中央：メインゲーム＋ログ -->
+  <div class="center-col">
+
+    <!-- アラートバナー -->
+    <div class="alert-banner" id="alert-banner">
+      ⚠️ 不渡りが発生しました！信用スコアが低下します。
+    </div>
+
+    <!-- メインゲームパネル -->
+    <div class="panel">
+      <div class="turn-bar">
+        <div class="turn-badge" id="turn-badge">1月</div>
+        <div class="turn-steps" id="turn-steps"></div>
+      </div>
+
+      <div class="cards-label">👇 今月の経営判断を1つ選んでください</div>
+      <div class="cards-grid" id="cards-grid">
+        <!-- JSで動的生成 -->
+      </div>
+
+      <div class="confirm-area">
+        <button class="btn-confirm" id="btn-confirm" disabled onclick="confirmSelection()">
+          この仕訳で確定する
+        </button>
+      </div>
+    </div>
+
+    <!-- 仕訳ログ -->
+    <div class="panel">
+      <div class="panel-title">📋 仕訳ログ</div>
+      <div class="log-list" id="log-list"></div>
+    </div>
+
+  </div>
+
+  <!-- 右：ステータス -->
+  <div class="panel status-col">
+    <div class="panel-title">📈 経営指標</div>
+
+    <div class="credit-score-wrap">
+      <div class="credit-label">信用スコア</div>
+      <span class="credit-badge good" id="credit-badge">100 / 100</span>
+    </div>
+
+    <div class="stat-row">
+      <span class="stat-label">原価率</span>
+      <div style="text-align:right">
+        <span class="stat-val" id="stat-cost-rate">70%</span>
+        <div class="bar-wrap"><div class="bar-fill warning" id="bar-cost-rate" style="width:70%"></div></div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <span class="stat-label">自己資本比率</span>
+      <div style="text-align:right">
+        <span class="stat-val" id="stat-equity">100%</span>
+        <div class="bar-wrap"><div class="bar-fill" id="bar-equity" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <div class="stat-row">
+      <span class="stat-label">選択肢の枠数</span>
+      <span class="stat-val" id="stat-slots">5枠</span>
+    </div>
+
+    <div class="panel-title" style="margin-top:14px;">⚡ 有効な効果</div>
+    <div id="active-effects">
+      <div class="empty-note">効果なし</div>
+    </div>
+
+    <div class="panel-title" style="margin-top:14px;">🔄 毎月の固定費</div>
+    <div class="auto-fixed">
+      <div>給料 ▶ <strong>600千円</strong></div>
+      <div>家賃 ▶ <strong>200千円</strong></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 自動処理モーダル -->
+<div class="modal-overlay hidden" id="auto-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>🔄 自動処理のお知らせ</span>
+      <span class="modal-month" id="modal-month">1月</span>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-modal-ok" onclick="closeAutoModal()">確認しました</button>
+    </div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
