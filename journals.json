@@ -1,0 +1,415 @@
+{
+  "journals": [
+    {
+      "id": "001",
+      "category": "売上",
+      "name": "商品を掛けで売った",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "売掛金",
+          "role": "sales"
+        },
+        {
+          "side": "credit",
+          "account": "商品売上",
+          "role": "sales"
+        },
+        {
+          "side": "debit",
+          "account": "商品売上原価",
+          "role": "cogs"
+        },
+        {
+          "side": "credit",
+          "account": "商品",
+          "role": "cogs"
+        }
+      ],
+      "amountMin": 2500000,
+      "amountMax": 15000000,
+      "amountStep": 10000,
+      "growthRate": 0.05,
+      "duplicateAllowed": false,
+      "requiresStock": true,
+      "effect": {
+        "type": "autoSettle",
+        "target": "receivable",
+        "monthsMin": 2,
+        "monthsMax": 3
+      }
+    },
+    {
+      "id": "002",
+      "category": "売上",
+      "name": "商品を現金で売った",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "現金",
+          "role": "sales"
+        },
+        {
+          "side": "credit",
+          "account": "商品売上",
+          "role": "sales"
+        },
+        {
+          "side": "debit",
+          "account": "商品売上原価",
+          "role": "cogs"
+        },
+        {
+          "side": "credit",
+          "account": "商品",
+          "role": "cogs"
+        }
+      ],
+      "amountMin": 500000,
+      "amountMax": 5000000,
+      "amountStep": 10000,
+      "growthRate": 0.05,
+      "duplicateAllowed": false,
+      "requiresStock": true,
+      "effect": null
+    },
+    {
+      "id": "003",
+      "category": "売上",
+      "name": "広告宣伝費を使った",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "広告宣伝費",
+          "role": "expense"
+        },
+        {
+          "side": "credit",
+          "account": "現金",
+          "role": "expense"
+        }
+      ],
+      "amountMin": 100000,
+      "amountMax": 500000,
+      "amountStep": 10000,
+      "growthRate": 0,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "effect": {
+        "type": "salesCapUp",
+        "coefficient": 0.5,
+        "timing": "nextMonth"
+      }
+    },
+    {
+      "id": "004",
+      "category": "仕入",
+      "name": "商品を掛けで仕入れた",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "仕入",
+          "role": "purchase"
+        },
+        {
+          "side": "credit",
+          "account": "買掛金",
+          "role": "purchase"
+        }
+      ],
+      "amountMin": 1500000,
+      "amountMax": 10000000,
+      "amountStep": 10000,
+      "growthRate": 0.05,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "effect": {
+        "type": "autoSettle",
+        "target": "payable",
+        "monthsMin": 2,
+        "monthsMax": 3
+      }
+    },
+    {
+      "id": "005",
+      "category": "固定資産",
+      "name": "設備投資をした（機械装置）",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "機械装置",
+          "role": "asset"
+        },
+        {
+          "side": "credit",
+          "account": "現金",
+          "role": "asset"
+        }
+      ],
+      "amountMin": 1000000,
+      "amountMax": 5000000,
+      "amountStep": 100000,
+      "growthRate": 0,
+      "duplicateAllowed": true,
+      "requiresStock": false,
+      "depreciation": {
+        "method": "straightLine",
+        "bookMethod": "indirect",
+        "usefulYearsOptions": [
+          3,
+          5,
+          8
+        ]
+      },
+      "effect": {
+        "type": "costRateDown",
+        "coefficient": 2e-06,
+        "timing": "nextMonth",
+        "stackable": true
+      }
+    },
+    {
+      "id": "006",
+      "category": "固定資産",
+      "name": "建物を購入した",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "建物",
+          "role": "asset"
+        },
+        {
+          "side": "credit",
+          "account": "現金",
+          "role": "asset"
+        }
+      ],
+      "amountMin": 5000000,
+      "amountMax": 30000000,
+      "amountStep": 500000,
+      "growthRate": 0,
+      "duplicateAllowed": true,
+      "requiresStock": false,
+      "depreciation": {
+        "method": "straightLine",
+        "bookMethod": "indirect",
+        "usefulYearsOptions": [
+          20,
+          30,
+          40
+        ]
+      },
+      "effect": {
+        "type": "costRateDown",
+        "coefficient": 5e-07,
+        "timing": "nextMonth",
+        "stackable": true
+      }
+    },
+    {
+      "id": "007",
+      "category": "固定資産",
+      "name": "ソフトウェアを購入した",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "ソフトウェア",
+          "role": "asset"
+        },
+        {
+          "side": "credit",
+          "account": "現金",
+          "role": "asset"
+        }
+      ],
+      "amountMin": 500000,
+      "amountMax": 2000000,
+      "amountStep": 100000,
+      "growthRate": 0,
+      "duplicateAllowed": true,
+      "requiresStock": false,
+      "depreciation": {
+        "method": "straightLine",
+        "bookMethod": "direct",
+        "usefulYearsOptions": [
+          3,
+          5
+        ]
+      },
+      "effect": {
+        "type": "addSlot",
+        "value": 1,
+        "timing": "nextMonth",
+        "stackable": true
+      }
+    },
+    {
+      "id": "008",
+      "category": "資金",
+      "name": "短期借入をした",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "現金",
+          "role": "finance"
+        },
+        {
+          "side": "debit",
+          "account": "支払利息",
+          "role": "expense"
+        },
+        {
+          "side": "credit",
+          "account": "短期借入金",
+          "role": "finance"
+        }
+      ],
+      "amountMin": 1000000,
+      "amountMax": 5000000,
+      "amountStep": 100000,
+      "growthRate": 0,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "loanConfig": {
+        "type": "short",
+        "interestRateMin": 0.015,
+        "interestRateMax": 0.04,
+        "interestRatePenalty": 0.02,
+        "repayMonthsOptions": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "prepaidInterest": true
+      },
+      "effect": null
+    },
+    {
+      "id": "009",
+      "category": "資金",
+      "name": "長期借入をした",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "現金",
+          "role": "finance"
+        },
+        {
+          "side": "credit",
+          "account": "長期借入金",
+          "role": "finance"
+        }
+      ],
+      "amountMin": 3000000,
+      "amountMax": 20000000,
+      "amountStep": 500000,
+      "growthRate": 0,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "loanConfig": {
+        "type": "long",
+        "interestRateMin": 0.02,
+        "interestRateMax": 0.04,
+        "interestRatePenalty": 0.02,
+        "repayYearsOptions": [
+          8,
+          10,
+          12
+        ],
+        "prepaidInterest": false
+      },
+      "effect": {
+        "type": "autoMonthly",
+        "target": "longLoan"
+      }
+    },
+    {
+      "id": "010",
+      "category": "資金",
+      "name": "増資した",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "現金",
+          "role": "finance"
+        },
+        {
+          "side": "credit",
+          "account": "資本金",
+          "role": "finance"
+        }
+      ],
+      "amountMin": 1000000,
+      "amountMax": 10000000,
+      "amountStep": 500000,
+      "growthRate": 0,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "creditScoreEffect": {
+        "normalMax": 10000000,
+        "penaltyMax": 3000000,
+        "severeMax": 500000
+      },
+      "effect": null
+    },
+    {
+      "id": "011",
+      "category": "有価証券",
+      "name": "売買目的有価証券を購入した",
+      "entries": [
+        {
+          "side": "debit",
+          "account": "売買目的有価証券",
+          "role": "asset"
+        },
+        {
+          "side": "credit",
+          "account": "現金",
+          "role": "asset"
+        }
+      ],
+      "amountMin": 500000,
+      "amountMax": 5000000,
+      "amountStep": 100000,
+      "growthRate": 0,
+      "duplicateAllowed": false,
+      "requiresStock": false,
+      "effect": {
+        "type": "buySecurities"
+      }
+    }
+  ],
+  "autoProcesses": [
+    {
+      "id": "auto_salary",
+      "name": "給料",
+      "debit": "給料",
+      "credit": "現金",
+      "amount": 600000,
+      "timing": "everyMonth"
+    },
+    {
+      "id": "auto_rent",
+      "name": "家賃",
+      "debit": "地代家賃",
+      "credit": "現金",
+      "amount": 200000,
+      "timing": "everyMonth"
+    }
+  ],
+  "closingProcesses": [
+    {
+      "id": "closing_allowance",
+      "name": "貸倒引当金繰入",
+      "description": "期末売掛金残高×3%",
+      "rate": 0.03,
+      "baseAccount": "売掛金"
+    },
+    {
+      "id": "closing_depreciation",
+      "name": "減価償却費",
+      "description": "未処理分の減価償却を計上"
+    }
+  ]
+}
