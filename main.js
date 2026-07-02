@@ -56,6 +56,8 @@ const gameState = {
   tempCostRateChanges: [],
   permanentSalesCapBonus: 0,
   _fraudGameOverRate: 0,
+  fraudAssets: 0,   // 粉飾決算による架空資産（???資産）
+  cryptoAssets: 0,  // 暗号資産投資の帳簿価額
 
   // 仕訳ログ
   logs: [
@@ -1018,7 +1020,9 @@ function calcTotalAssets() {
     + gameState.receivables.reduce((s,r) => s + r.amount, 0)
     + gameState.inventory
     + gameState.securities.reduce((s,sec) => s + sec.currentPrice, 0)
-    + gameState.fixedAssets.reduce((s,a) => s + a.bookValue, 0);
+    + gameState.fixedAssets.reduce((s,a) => s + a.bookValue, 0)
+    + (gameState.fraudAssets || 0)
+    + (gameState.cryptoAssets || 0);
 }
 
 function calcTotalLiabilities() {
@@ -1057,6 +1061,26 @@ function renderFinance() {
   setKpi('fin-ar',    arTotal,                   'neutral');
   setKpi('fin-inv',   gameState.inventory,        'neutral');
   setKpi('fin-fa',    faTotal,                   'neutral');
+
+  const fraudRow = document.getElementById('fin-fraud-row');
+  if (fraudRow) {
+    if (gameState.fraudAssets > 0) {
+      fraudRow.style.display = '';
+      setKpi('fin-fraud', gameState.fraudAssets, 'negative');
+    } else {
+      fraudRow.style.display = 'none';
+    }
+  }
+  const cryptoRow = document.getElementById('fin-crypto-row');
+  if (cryptoRow) {
+    if (gameState.cryptoAssets > 0) {
+      cryptoRow.style.display = '';
+      setKpi('fin-crypto', gameState.cryptoAssets, 'neutral');
+    } else {
+      cryptoRow.style.display = 'none';
+    }
+  }
+
   setKpi('fin-ap',    apTotal,                   'neutral');
   setKpi('fin-stl',   stlTotal,                  'neutral');
   setKpi('fin-ltl',   ltlTotal,                  'neutral');

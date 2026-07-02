@@ -24,12 +24,6 @@
           "label": "見送る",
           "description": "今回は見送る",
           "effect": { "type": "none" }
-        },
-        {
-          "id": "c",
-          "label": "後で考える",
-          "description": "次回また検討する",
-          "effect": { "type": "none" }
         }
       ]
     },
@@ -49,6 +43,7 @@
             "type": "permanentSalesCapUp",
             "cost": 300000,
             "value": 0.10,
+            "journalEntry": { "debit": "業務委託費", "credit": "現金", "amount": 300000 },
             "message": "毎月の売上上限が恒久的に+10%になりました！"
           }
         },
@@ -56,12 +51,6 @@
           "id": "b",
           "label": "見送る",
           "description": "今回は見送る",
-          "effect": { "type": "none" }
-        },
-        {
-          "id": "c",
-          "label": "自社で対応する",
-          "description": "費用をかけずに自社で対応する",
           "effect": { "type": "none" }
         }
       ]
@@ -82,6 +71,7 @@
             "type": "fraud",
             "salesBonus": 5000000,
             "gameOverRate": 0.90,
+            "journalEntry": { "debit": "???資産", "credit": "売上", "amount": 5000000 },
             "message": "帳簿上の利益が5,000千円増加しました。しかし…"
           }
         },
@@ -103,6 +93,7 @@
             "type": "fraud",
             "salesBonus": 1500000,
             "gameOverRate": 0.40,
+            "journalEntry": { "debit": "???資産", "credit": "売上", "amount": 1500000 },
             "message": "帳簿上の利益が1,500千円増加しました。"
           }
         }
@@ -127,6 +118,7 @@
             "winRate": 0.50,
             "winMultiplier": 2.0,
             "loseMultiplier": 0,
+            "journalEntry": { "debit": "暗号資産", "credit": "現金", "amount": 1000000 },
             "message": "1,000千円を投資しました。3ターン後に結果が判明します。"
           }
         },
@@ -147,6 +139,7 @@
             "winRate": 0.50,
             "winMultiplier": 2.0,
             "loseMultiplier": 0,
+            "journalEntry": { "debit": "暗号資産", "credit": "現金", "amount": 300000 },
             "message": "300千円を投資しました。3ターン後に結果が判明します。"
           }
         }
@@ -210,18 +203,19 @@
             "cost": 500000,
             "costRateUp": 0.05,
             "duration": 1,
+            "journalEntry": { "debit": "修繕費", "credit": "現金", "amount": 500000 },
             "message": "修理完了。今月は原価率が+5%になります。"
           }
         },
         {
           "id": "b",
           "label": "だましだまし使う",
-          "description": "費用なし。3ターン間原価率+15%",
+          "description": "費用なし。原価率が永続的に+5%悪化する",
           "effect": {
             "type": "temporaryCostRateUp",
-            "costRateUp": 0.15,
-            "duration": 3,
-            "message": "設備の不調により3ターン間、原価率が+15%になります。"
+            "costRateUp": 0.05,
+            "permanent": true,
+            "message": "設備の老朽化により原価率が永続的に+5%悪化しました。"
           }
         },
         {
@@ -232,6 +226,7 @@
             "type": "newEquipment",
             "cost": 2000000,
             "costRateDown": 0.05,
+            "journalEntry": { "debit": "機械装置", "credit": "現金", "amount": 2000000 },
             "message": "新設備導入により原価率が恒久的に-5%になりました。"
           }
         }
@@ -254,6 +249,7 @@
             "amount": 1000000,
             "useFor": "fixedAsset",
             "costRateDown": 0.02,
+            "journalEntry": { "debit": "現金", "credit": "補助金収入", "amount": 1000000 },
             "message": "補助金で設備投資しました。原価率が-2%になりました。"
           }
         },
@@ -264,6 +260,7 @@
           "effect": {
             "type": "cashIn",
             "amount": 1000000,
+            "journalEntry": { "debit": "現金", "credit": "雑収入", "amount": 1000000 },
             "message": "補助金1,000千円を現金で受け取りました。"
           }
         },
@@ -276,6 +273,7 @@
             "cost": 1000000,
             "delayTurns": 3,
             "value": 0.20,
+            "journalEntry": { "debit": "教育研修費", "credit": "現金", "amount": 1000000 },
             "message": "人材育成に投資しました。3ターン後から売上上限が+20%になります。"
           }
         }
@@ -309,15 +307,6 @@
             "sales": 2000000,
             "message": "既存在庫で対応しました。"
           }
-        },
-        {
-          "id": "c",
-          "label": "断る",
-          "description": "今回は対応できない",
-          "effect": {
-            "type": "none",
-            "message": "今回の注文をお断りしました。"
-          }
         }
       ]
     },
@@ -345,17 +334,6 @@
           "label": "現状維持",
           "description": "変化なし",
           "effect": { "type": "none" }
-        },
-        {
-          "id": "c",
-          "label": "逆に増員する",
-          "description": "給料+200千円/月。売上上限+15%（恒久）",
-          "effect": {
-            "type": "increaseSalary",
-            "salaryChange": 200000,
-            "salesCapUp": 0.15,
-            "message": "増員により売上上限が恒久的に+15%になりました。"
-          }
         }
       ]
     },
@@ -382,17 +360,6 @@
           "label": "現状維持",
           "description": "変化なし",
           "effect": { "type": "none" }
-        },
-        {
-          "id": "c",
-          "label": "追加借入する",
-          "description": "現金+2,000千円（利率は通常より0.5%高め）",
-          "effect": {
-            "type": "additionalLoan",
-            "amount": 2000000,
-            "interestRatePenalty": 0.005,
-            "message": "追加借入で現金が2,000千円増加しました。"
-          }
         }
       ]
     }
