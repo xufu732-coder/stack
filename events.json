@@ -15,7 +15,7 @@
           "effect": {
             "type": "unlockJournal",
             "cost": 500000,
-            "unlockIds": ["ev_land_buy", "ev_land_sell"],
+            "unlockIds": ["012", "013"],
             "message": "不動産売買仕訳が解放されました！"
           }
         },

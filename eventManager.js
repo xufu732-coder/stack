@@ -113,6 +113,22 @@ function applyEventEffect(ev, choice) {
     case 'none':
       break;
 
+    case 'unlockJournal':
+      if (gameState.cash < effect.cost) {
+        showEventResult('現金が不足しています。');
+        return;
+      }
+      gameState.cash -= effect.cost;
+      gameState.sgaExpenses += effect.cost;
+      for (const id of effect.unlockIds) {
+        if (!gameState.unlockedJournals.includes(id)) {
+          gameState.unlockedJournals.push(id);
+        }
+      }
+      addLog(gameState.turn + '月',
+        `【イベント】${ev.name}：借）支払手数料 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}<br>不動産売買仕訳が解放されました`, false);
+      break;
+
     case 'cashIn':
       gameState.cash += effect.amount;
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）雑収入 ${fmt(effect.amount)}`, false);
