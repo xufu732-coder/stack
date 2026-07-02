@@ -1,0 +1,400 @@
+{
+  "events": [
+    {
+      "id": "ev_001",
+      "type": "unlock",
+      "oneTime": true,
+      "name": "不動産鑑定士と契約した",
+      "description": "不動産鑑定士から提携の申し出があった。契約すれば不動産売買が可能になる。",
+      "icon": "🏢",
+      "choices": [
+        {
+          "id": "a",
+          "label": "契約する",
+          "description": "費用500千円を支払い契約する",
+          "effect": {
+            "type": "unlockJournal",
+            "cost": 500000,
+            "unlockIds": ["ev_land_buy", "ev_land_sell"],
+            "message": "不動産売買仕訳が解放されました！"
+          }
+        },
+        {
+          "id": "b",
+          "label": "見送る",
+          "description": "今回は見送る",
+          "effect": { "type": "none" }
+        },
+        {
+          "id": "c",
+          "label": "後で考える",
+          "description": "次回また検討する",
+          "effect": { "type": "none" }
+        }
+      ]
+    },
+    {
+      "id": "ev_002",
+      "type": "unlock",
+      "oneTime": true,
+      "name": "ITコンサルと提携した",
+      "description": "ITコンサル会社から業務効率化の提案があった。提携すれば毎月売上上限が上がる。",
+      "icon": "💻",
+      "choices": [
+        {
+          "id": "a",
+          "label": "提携する",
+          "description": "費用300千円を支払い提携する",
+          "effect": {
+            "type": "permanentSalesCapUp",
+            "cost": 300000,
+            "value": 0.10,
+            "message": "毎月の売上上限が恒久的に+10%になりました！"
+          }
+        },
+        {
+          "id": "b",
+          "label": "見送る",
+          "description": "今回は見送る",
+          "effect": { "type": "none" }
+        },
+        {
+          "id": "c",
+          "label": "自社で対応する",
+          "description": "費用をかけずに自社で対応する",
+          "effect": { "type": "none" }
+        }
+      ]
+    },
+    {
+      "id": "ev_003",
+      "type": "gamble",
+      "oneTime": false,
+      "name": "粉飾決算の誘惑",
+      "description": "顧問から「数字を少し調整すれば投資家からの評価が上がる」と囁かれた。",
+      "icon": "⚠️",
+      "choices": [
+        {
+          "id": "a",
+          "label": "粉飾する",
+          "description": "利益+5,000千円。ただし最終評価時に90%でゲームオーバー",
+          "effect": {
+            "type": "fraud",
+            "salesBonus": 5000000,
+            "gameOverRate": 0.90,
+            "message": "帳簿上の利益が5,000千円増加しました。しかし…"
+          }
+        },
+        {
+          "id": "b",
+          "label": "断る",
+          "description": "正直な経営を続ける",
+          "effect": {
+            "type": "creditUp",
+            "value": 5,
+            "message": "誠実な経営姿勢が評価され、信用スコアが+5されました。"
+          }
+        },
+        {
+          "id": "c",
+          "label": "一部だけ調整する",
+          "description": "利益+1,500千円。最終評価時に40%でゲームオーバー",
+          "effect": {
+            "type": "fraud",
+            "salesBonus": 1500000,
+            "gameOverRate": 0.40,
+            "message": "帳簿上の利益が1,500千円増加しました。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_004",
+      "type": "gamble",
+      "oneTime": false,
+      "name": "仮想通貨投資の勧誘",
+      "description": "知人から仮想通貨への投資を勧められた。大きく増えるかもしれないが…",
+      "icon": "🎰",
+      "choices": [
+        {
+          "id": "a",
+          "label": "投資する（1,000千円）",
+          "description": "3ターン後に50%で2倍、50%でゼロになる",
+          "effect": {
+            "type": "gambling",
+            "cost": 1000000,
+            "delayTurns": 3,
+            "winRate": 0.50,
+            "winMultiplier": 2.0,
+            "loseMultiplier": 0,
+            "message": "1,000千円を投資しました。3ターン後に結果が判明します。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "断る",
+          "description": "安全な経営を優先する",
+          "effect": { "type": "none" }
+        },
+        {
+          "id": "c",
+          "label": "少額だけ（300千円）",
+          "description": "3ターン後に50%で2倍、50%でゼロになる",
+          "effect": {
+            "type": "gambling",
+            "cost": 300000,
+            "delayTurns": 3,
+            "winRate": 0.50,
+            "winMultiplier": 2.0,
+            "loseMultiplier": 0,
+            "message": "300千円を投資しました。3ターン後に結果が判明します。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_005",
+      "type": "minus",
+      "oneTime": false,
+      "name": "主要取引先が倒産した",
+      "description": "売掛金のある取引先が突然倒産した。回収できる金額が変わってくる。",
+      "icon": "💸",
+      "choices": [
+        {
+          "id": "a",
+          "label": "貸倒損失を計上する",
+          "description": "売掛金残高の50%を貸倒損失として計上",
+          "effect": {
+            "type": "badDebt",
+            "rate": 0.50,
+            "message": "売掛金の50%が貸倒損失として計上されました。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "弁護士に依頼する",
+          "description": "費用200千円。売掛金の70%を回収できる",
+          "effect": {
+            "type": "badDebtWithLawyer",
+            "cost": 200000,
+            "recoveryRate": 0.70,
+            "message": "弁護士の介入により売掛金の70%を回収できました。"
+          }
+        },
+        {
+          "id": "c",
+          "label": "様子を見る",
+          "description": "何もしない。売掛金の30%しか回収できない",
+          "effect": {
+            "type": "badDebt",
+            "rate": 0.70,
+            "message": "対応が遅れ、売掛金の70%が回収不能になりました。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_006",
+      "type": "minus",
+      "oneTime": false,
+      "name": "工場設備が故障した",
+      "description": "主力設備が突然故障した。生産効率が落ちる前に対応が必要だ。",
+      "icon": "🔧",
+      "choices": [
+        {
+          "id": "a",
+          "label": "すぐ修理する",
+          "description": "費用500千円。1ターンだけ原価率+5%",
+          "effect": {
+            "type": "repair",
+            "cost": 500000,
+            "costRateUp": 0.05,
+            "duration": 1,
+            "message": "修理完了。今月は原価率が+5%になります。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "だましだまし使う",
+          "description": "費用なし。3ターン間原価率+15%",
+          "effect": {
+            "type": "temporaryCostRateUp",
+            "costRateUp": 0.15,
+            "duration": 3,
+            "message": "設備の不調により3ターン間、原価率が+15%になります。"
+          }
+        },
+        {
+          "id": "c",
+          "label": "新品購入する",
+          "description": "費用2,000千円。原価率-5%（翌月から恒久）",
+          "effect": {
+            "type": "newEquipment",
+            "cost": 2000000,
+            "costRateDown": 0.05,
+            "message": "新設備導入により原価率が恒久的に-5%になりました。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_007",
+      "type": "plus",
+      "oneTime": false,
+      "name": "政府から補助金が採択された",
+      "description": "申請していた補助金が採択された。使い道を選択できる。",
+      "icon": "🏛️",
+      "choices": [
+        {
+          "id": "a",
+          "label": "設備投資に使う",
+          "description": "補助金1,000千円分の固定資産を取得",
+          "effect": {
+            "type": "subsidy",
+            "amount": 1000000,
+            "useFor": "fixedAsset",
+            "costRateDown": 0.02,
+            "message": "補助金で設備投資しました。原価率が-2%になりました。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "現金で受け取る",
+          "description": "現金+1,000千円",
+          "effect": {
+            "type": "cashIn",
+            "amount": 1000000,
+            "message": "補助金1,000千円を現金で受け取りました。"
+          }
+        },
+        {
+          "id": "c",
+          "label": "人材育成に使う",
+          "description": "費用1,000千円。3ターン後から売上上限+20%",
+          "effect": {
+            "type": "delayedSalesCapUp",
+            "cost": 1000000,
+            "delayTurns": 3,
+            "value": 0.20,
+            "message": "人材育成に投資しました。3ターン後から売上上限が+20%になります。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_008",
+      "type": "plus",
+      "oneTime": false,
+      "name": "大口顧客から注文が入った",
+      "description": "大手企業から大口注文の打診があった。どう対応する？",
+      "icon": "📦",
+      "choices": [
+        {
+          "id": "a",
+          "label": "在庫を急いで仕入れる",
+          "description": "仕入費用2,000千円。売上+3,500千円",
+          "effect": {
+            "type": "bigOrder",
+            "cost": 2000000,
+            "sales": 3500000,
+            "message": "大口注文に対応！売上3,500千円を計上しました。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "既存在庫で対応する",
+          "description": "在庫があれば売上+2,000千円。なければ失注",
+          "effect": {
+            "type": "bigOrderFromStock",
+            "sales": 2000000,
+            "message": "既存在庫で対応しました。"
+          }
+        },
+        {
+          "id": "c",
+          "label": "断る",
+          "description": "今回は対応できない",
+          "effect": {
+            "type": "none",
+            "message": "今回の注文をお断りしました。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_009",
+      "type": "tradeoff",
+      "oneTime": false,
+      "name": "人件費削減の提案",
+      "description": "コンサルから人件費削減の提案があった。利益は増えるが、社員のモチベーションへの影響も。",
+      "icon": "👥",
+      "choices": [
+        {
+          "id": "a",
+          "label": "削減する",
+          "description": "給料-200千円/月。信用スコア-10",
+          "effect": {
+            "type": "reduceSalary",
+            "salaryChange": -200000,
+            "creditChange": -10,
+            "message": "人件費を削減しました。信用スコアが-10されました。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "現状維持",
+          "description": "変化なし",
+          "effect": { "type": "none" }
+        },
+        {
+          "id": "c",
+          "label": "逆に増員する",
+          "description": "給料+200千円/月。売上上限+15%（恒久）",
+          "effect": {
+            "type": "increaseSalary",
+            "salaryChange": 200000,
+            "salesCapUp": 0.15,
+            "message": "増員により売上上限が恒久的に+15%になりました。"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ev_010",
+      "type": "tradeoff",
+      "oneTime": false,
+      "name": "銀行から金利優遇の案内",
+      "description": "メインバンクから金利優遇の案内が届いた。借換えるか、追加借入するか。",
+      "icon": "🏦",
+      "choices": [
+        {
+          "id": "a",
+          "label": "既存借入を借換える",
+          "description": "長期借入金の利率を-1%に変更",
+          "effect": {
+            "type": "refinance",
+            "interestRateChange": -0.01,
+            "message": "借換え完了。長期借入金の利率が-1%になりました。"
+          }
+        },
+        {
+          "id": "b",
+          "label": "現状維持",
+          "description": "変化なし",
+          "effect": { "type": "none" }
+        },
+        {
+          "id": "c",
+          "label": "追加借入する",
+          "description": "現金+2,000千円（利率は通常より0.5%高め）",
+          "effect": {
+            "type": "additionalLoan",
+            "amount": 2000000,
+            "interestRatePenalty": 0.005,
+            "message": "追加借入で現金が2,000千円増加しました。"
+          }
+        }
+      ]
+    }
+  ]
+}

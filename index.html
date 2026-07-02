@@ -159,6 +159,27 @@
   </div>
 </div>
 
+<!-- イベントモーダル -->
+<div class="modal-overlay hidden" id="event-modal">
+  <div class="modal-box event-modal-box">
+    <div class="modal-header event-header">
+      <span>🎲 イベント発生！</span>
+      <span class="modal-month" id="event-turn-label">3月</span>
+    </div>
+    <div class="modal-body">
+      <p class="event-instruction">今月のイベントを1つ選んでください</p>
+      <div class="event-cards-grid" id="event-cards-grid"></div>
+      <div id="event-result" style="display:none;">
+        <p class="event-result-text" id="event-result-text"></p>
+        <div style="text-align:center;margin-top:16px;">
+          <button class="btn-modal-ok" onclick="closeEventModal()">確認しました</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="main.js"></script>
+<script src="eventManager.js"></script>
 </body>
 </html>

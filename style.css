@@ -522,3 +522,82 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.05em; }
 .sec-gain { font-weight: 700; font-size: 0.75rem; }
 .sec-gain.up   { color: var(--success); }
 .sec-gain.down { color: var(--danger); }
+
+/* ===== イベントモーダル ===== */
+.event-modal-box {
+  max-width: 860px;
+}
+.event-header {
+  background: #7C3AED;
+}
+.event-instruction {
+  font-size: 0.85rem;
+  color: var(--text-sub);
+  margin-bottom: 12px;
+  text-align: center;
+}
+.event-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 700px) {
+  .event-cards-grid { grid-template-columns: 1fr; }
+}
+.event-card {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--card-bg);
+}
+.event-card-blue   { border-color: #3B82F6; }
+.event-card-red    { border-color: #EF4444; }
+.event-card-green  { border-color: #22C55E; }
+.event-card-orange { border-color: #F97316; }
+.event-card-purple { border-color: #A855F7; }
+.ev-icon { font-size: 1.8rem; text-align: center; margin-bottom: 6px; }
+.ev-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.ev-desc {
+  font-size: 0.75rem;
+  color: var(--text-sub);
+  text-align: center;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.ev-choices { display: flex; flex-direction: column; gap: 6px; }
+.ev-choice-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.ev-choice-btn:hover {
+  border-color: var(--primary);
+  background: var(--card-bg);
+}
+.ev-choice-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.ev-choice-desc {
+  font-size: 0.7rem;
+  color: var(--text-sub);
+}
+.event-result-text {
+  font-size: 0.95rem;
+  text-align: center;
+  padding: 20px;
+  line-height: 1.7;
+  font-weight: 600;
+  color: var(--text);
+}
