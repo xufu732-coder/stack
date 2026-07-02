@@ -49,6 +49,14 @@ const gameState = {
   // 有効な追加効果
   activeEffects: [],
 
+  // イベント管理
+  usedEventIds: [],
+  pendingGambles: [],
+  pendingDelayedEffects: [],
+  tempCostRateChanges: [],
+  permanentSalesCapBonus: 0,
+  _fraudGameOverRate: 0,
+
   // 仕訳ログ
   logs: [
     { month: '開始', text: '現金 <strong>1,000万円</strong> ／ 資本金 <strong>1,000万円</strong>', auto: true }
@@ -91,6 +99,7 @@ async function loadData() {
   const data = await res.json();
   journalMaster = data.journals;
   autoProcesses = data.autoProcesses;
+  await loadEvents();
   init();
 }
 
@@ -397,6 +406,13 @@ function confirmSelection() {
   // 帳簿に反映
   applyJournal(j, amount, card);
 
+  // イベント発火チェック
+  if (checkEventTrigger()) {
+    document.getElementById('event-turn-label').textContent = gameState.turn + '月';
+    showEventModal();
+    return;
+  }
+
   // 次のターンへ
   advanceTurn();
 }
@@ -582,6 +598,9 @@ function advanceTurn() {
   // 自動処理通知リストを初期化
   gameState._autoNotices = [];
 
+  // 遅延効果の処理（ギャンブル結果・遅延ボーナスなど）
+  resolveDelayedEffects();
+
   // 翌月効果の反映
   applyPendingEffects();
 
@@ -631,8 +650,9 @@ function applyPendingEffects() {
     gameState.cardSlots += gameState._pendingAddSlot;
     gameState._pendingAddSlot = 0;
   }
-  // 広告効果（1ターン限り）
-  gameState.salesCapBonus = gameState.pendingSalesCapBonus || 0;
+  // 広告効果（1ターン限り）＋恒久的売上上限ボーナスを合算
+  gameState.salesCapBonus = (gameState.pendingSalesCapBonus || 0)
+    + (gameState.permanentSalesCapBonus || 0);
   gameState.pendingSalesCapBonus = 0;
 }
 
@@ -905,6 +925,11 @@ function renderSecurities() {
 // 決算整理（12ターン終了後）
 // -----------------------------------------------
 function runClosing() {
+  if (checkFraudGameOver()) {
+    alert('【ゲームオーバー】粉飾決算が発覚しました！\n経営者責任を問われ、ゲームオーバーです。');
+    return;
+  }
+
   addLog('決算', '決算整理を開始します', true);
 
   // 減価償却（まとめて計上）
