@@ -831,7 +831,36 @@ function buySecurities(amount) {
   renderSecurities();
 }
 
+// ボタンを押したとき → 確認画面を出すだけ
 function sellSecurities(secId) {
+  const sec = gameState.securities.find(s => s.id === secId);
+  if (!sec) return;
+
+  const gain = sec.currentPrice - sec.cost;
+  const isProfit = gain >= 0;
+
+  const body = document.getElementById('sell-confirm-body');
+  body.innerHTML = `
+    <div class="modal-entry">
+      <div class="modal-entry-icon blue">💰</div>
+      <div class="modal-entry-text">
+        <div><strong>${sec.name}</strong> を売却します</div>
+        <div class="sub">売却額：${fmt(sec.currentPrice)}</div>
+        <div class="sub">取得原価：${fmt(sec.cost)}</div>
+        <div class="sub" style="color:${isProfit ? 'var(--success)' : 'var(--danger)'}; font-weight:700;">
+          ${isProfit ? '売却益' : '売却損'}：${isProfit ? '+' : ''}${fmt(gain)}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('sell-confirm-header').textContent = '💰 売却確認';
+  gameState._pendingSell = { type: 'security', id: secId };
+  document.getElementById('sell-confirm-modal').classList.remove('hidden');
+}
+
+// 「売却する」を押したとき → 実際に売る
+function executeSellSecurity(secId) {
   const idx = gameState.securities.findIndex(s => s.id === secId);
   if (idx === -1) return;
   const sec = gameState.securities[idx];
@@ -974,10 +1003,89 @@ function renderFixedAssetList() {
   }
 }
 
+// ボタンを押したとき → 確認画面を出すだけ
 function sellFixedAsset(faId) {
-  const idx = gameState.fixedAssets.findIndex(fa => fa.id === faId);
+  const fa = gameState.fixedAssets.find(f => f.id === faId);
+  if (!fa) return;
+
+  // 売却前の減価償却を仮計算（確認画面に表示するため）
+  const depMonths = Math.max(0, gameState.turn - fa.createdTurn);
+  const alreadyDepMonths = fa.depPerMonth > 0
+    ? Math.round(fa.accumulatedDep / fa.depPerMonth) : 0;
+  const remainingMonths = Math.max(0, depMonths - alreadyDepMonths);
+  const preSaleDep = fa.depPerMonth > 0
+    ? Math.min(fa.depPerMonth * remainingMonths, fa.bookValue) : 0;
+
+  // 減価償却後の帳簿価額（売却時の実際の帳簿価額）
+  const bookValueAfterDep = fa.bookValue - preSaleDep;
+
+  // 売却価格（帳簿価額の50〜150%のランダム）
+  const minPrice = Math.round(bookValueAfterDep * 0.5);
+  const maxPrice = Math.round(bookValueAfterDep * 1.5);
+  const step = Math.round(bookValueAfterDep * 0.1) || 10000;
+  const salePrice = randBetween(minPrice, maxPrice, step);
+
+  const gain = salePrice - bookValueAfterDep;
+  const isProfit = gain >= 0;
+
+  // 消える効果の説明文を作る
+  let effectWarning = '';
+  if (fa.costDownEffect > 0) {
+    effectWarning = `
+      <div class="modal-entry" style="margin-top:8px;">
+        <div class="modal-entry-icon orange">⚠️</div>
+        <div class="modal-entry-text">
+          <div><strong>この資産を売ると…</strong></div>
+          <div class="sub" style="color:var(--danger);">
+            原価率が +${(fa.costDownEffect * 100).toFixed(2)}% 上昇します
+          </div>
+        </div>
+      </div>`;
+  } else if (fa.slotEffect > 0) {
+    effectWarning = `
+      <div class="modal-entry" style="margin-top:8px;">
+        <div class="modal-entry-icon orange">⚠️</div>
+        <div class="modal-entry-text">
+          <div><strong>この資産を売ると…</strong></div>
+          <div class="sub" style="color:var(--danger);">
+            選択肢の枠が ${fa.slotEffect}枠 減ります
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const body = document.getElementById('sell-confirm-body');
+  body.innerHTML = `
+    <div class="modal-entry">
+      <div class="modal-entry-icon blue">🏭</div>
+      <div class="modal-entry-text">
+        <div><strong>${fa.name}</strong> を売却します</div>
+        <div class="sub">売却額（査定額）：${fmt(salePrice)}</div>
+        <div class="sub">帳簿価額：${fmt(bookValueAfterDep)}</div>
+        ${preSaleDep > 0
+          ? `<div class="sub">※売却前に減価償却 ${fmt(preSaleDep)} を計上します</div>`
+          : ''}
+        <div class="sub" style="color:${isProfit ? 'var(--success)' : 'var(--danger)'}; font-weight:700;">
+          ${isProfit ? '売却益' : '売却損'}：${isProfit ? '+' : ''}${fmt(gain)}
+        </div>
+      </div>
+    </div>
+    ${effectWarning}
+  `;
+
+  document.getElementById('sell-confirm-header').textContent = '🏭 売却確認';
+  gameState._pendingSell = { type: 'fixedAsset', id: faId, salePrice };
+  document.getElementById('sell-confirm-modal').classList.remove('hidden');
+}
+
+// 「売却する」を押したとき → 実際に売る
+function executeSellFixedAsset(faId) {
+  const idx = gameState.fixedAssets.findIndex(f => f.id === faId);
   if (idx === -1) return;
   const fa = gameState.fixedAssets[idx];
+
+  // 確認画面で計算した売却価格を使う（再計算しない）
+  const salePrice = gameState._pendingSell.salePrice;
 
   // STEP A：売却前に未計上分の減価償却を月割りで計上する
   const depMonths = Math.max(0, gameState.turn - fa.createdTurn);
@@ -1001,16 +1109,10 @@ function sellFixedAsset(faId) {
     }
   }
 
-  // STEP B：売却金額を決める（帳簿価額の50〜150%のランダム）
-  const minPrice = Math.round(fa.bookValue * 0.5);
-  const maxPrice = Math.round(fa.bookValue * 1.5);
-  const step = Math.round(fa.bookValue * 0.1) || 10000;
-  const salePrice = randBetween(minPrice, maxPrice, step);
-
+  // STEP B：売却の仕訳を記録する
   const bookValue = fa.bookValue;
   const gain = salePrice - bookValue;
 
-  // STEP C：売却の仕訳を記録する
   gameState.cash += salePrice;
 
   if (fa.bookMethod === 'indirect') {
@@ -1040,24 +1142,47 @@ function sellFixedAsset(faId) {
     }
   }
 
-  // STEP D：この資産が持っていた効果を消す
+  // STEP C：この資産が持っていた効果を消す
   if (fa.costDownEffect > 0) {
     gameState.costRate = Math.min(0.999, gameState.costRate + fa.costDownEffect);
     addLog(gameState.turn + '月',
-      `【効果消滅】原価率が+${(fa.costDownEffect * 100).toFixed(2)}%戻りました`, false);
+      `【効果消滅】原価率が +${(fa.costDownEffect * 100).toFixed(2)}% 戻りました`, false);
     gameState.activeEffects = gameState.activeEffects.filter(e => e._assetId !== fa.id);
   }
 
   if (fa.slotEffect > 0) {
     gameState.cardSlots = Math.max(5, gameState.cardSlots - fa.slotEffect);
     addLog(gameState.turn + '月',
-      `【効果消滅】選択肢の枠が${fa.slotEffect}枠減りました`, false);
+      `【効果消滅】選択肢の枠が ${fa.slotEffect}枠 減りました`, false);
     gameState.activeEffects = gameState.activeEffects.filter(e => e._assetId !== fa.id);
   }
 
-  // STEP E：資産リストから削除して画面を更新
+  // STEP D：資産リストから削除して画面を更新
   gameState.fixedAssets.splice(idx, 1);
   renderAll();
+}
+
+// -----------------------------------------------
+// 売却確認モーダルの共通処理
+// -----------------------------------------------
+function closeSellConfirmModal() {
+  document.getElementById('sell-confirm-modal').classList.add('hidden');
+  gameState._pendingSell = null;
+}
+
+function executeSell() {
+  const pending = gameState._pendingSell;
+  if (!pending) return;
+
+  // 実行関数が gameState._pendingSell（査定額など）を参照するため、
+  // 先に売却を実行してからモーダルを閉じる（_pendingSellをnullにする）
+  if (pending.type === 'security') {
+    executeSellSecurity(pending.id);
+  } else if (pending.type === 'fixedAsset') {
+    executeSellFixedAsset(pending.id);
+  }
+
+  closeSellConfirmModal();
 }
 
 // -----------------------------------------------

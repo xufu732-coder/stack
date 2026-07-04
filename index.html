@@ -167,6 +167,38 @@
   </div>
 </div>
 
+<!-- 売却確認モーダル -->
+<div class="modal-overlay hidden" id="sell-confirm-modal">
+  <div class="modal-box">
+    <div class="modal-header" id="sell-confirm-header">
+      💰 売却確認
+    </div>
+    <div class="modal-body" id="sell-confirm-body">
+      <!-- JavaScriptで中身を動的に作る -->
+    </div>
+    <div class="modal-footer" style="display:flex; gap:12px; justify-content:center;">
+      <button
+        style="
+          background: var(--border);
+          color: var(--text);
+          border: none;
+          border-radius: 20px;
+          padding: 10px 30px;
+          font-size: 0.95rem;
+          font-weight: 700;
+          cursor: pointer;
+        "
+        onclick="closeSellConfirmModal()"
+      >キャンセル</button>
+      <button
+        class="btn-modal-ok"
+        id="sell-confirm-btn"
+        onclick="executeSell()"
+      >売却する</button>
+    </div>
+  </div>
+</div>
+
 <!-- イベントモーダル -->
 <div class="modal-overlay hidden" id="event-modal">
   <div class="modal-box event-modal-box">
