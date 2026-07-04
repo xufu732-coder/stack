@@ -118,15 +118,20 @@ function applyEventEffect(ev, choice) {
         showEventResult('現金が不足しています。');
         return;
       }
+      // お金を払う
       gameState.cash -= effect.cost;
       gameState.sgaExpenses += effect.cost;
-      for (const id of effect.unlockIds) {
-        if (!gameState.unlockedJournals.includes(id)) {
-          gameState.unlockedJournals.push(id);
-        }
-      }
+
+      // 固定資産の売却を解放する
+      gameState.fixedAssetSaleUnlocked = true;
+
+      // 仕訳ログに記録（お金が動いたので借方・貸方両方書く）
       addLog(gameState.turn + '月',
-        `【イベント】${ev.name}：借）支払手数料 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}<br>不動産売買仕訳が解放されました`, false);
+        `借）支払手数料 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}`, false);
+      addLog(gameState.turn + '月',
+        `【解放】固定資産の売却が可能になりました`, false);
+
+      showEventResult(effect.message || '不動産鑑定士との契約が完了しました。固定資産を売却できるようになりました！');
       break;
 
     case 'cashIn':

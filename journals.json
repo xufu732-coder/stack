@@ -378,53 +378,6 @@
       "effect": {
         "type": "buySecurities"
       }
-    },
-    {
-      "id": "012",
-      "category": "不動産",
-      "name": "土地を購入した",
-      "entries": [
-        { "side": "debit",  "account": "土地", "role": "asset" },
-        { "side": "credit", "account": "現金", "role": "asset" }
-      ],
-      "amountMin": 5000000,
-      "amountMax": 50000000,
-      "amountStep": 500000,
-      "growthRate": 0,
-      "duplicateAllowed": false,
-      "requiresStock": false,
-      "locked": true,
-      "unlockEventId": "ev_001",
-      "effect": {
-        "type": "buyRealEstate",
-        "assetType": "land"
-      }
-    },
-    {
-      "id": "013",
-      "category": "不動産",
-      "name": "建物（投資用）を購入した",
-      "entries": [
-        { "side": "debit",  "account": "投資不動産（建物）", "role": "asset" },
-        { "side": "credit", "account": "現金",               "role": "asset" }
-      ],
-      "amountMin": 3000000,
-      "amountMax": 30000000,
-      "amountStep": 500000,
-      "growthRate": 0,
-      "duplicateAllowed": false,
-      "requiresStock": false,
-      "locked": true,
-      "unlockEventId": "ev_001",
-      "depreciation": {
-        "method": "straightLine",
-        "bookMethod": "indirect",
-        "usefulYearsOptions": [20, 30, 40]
-      },
-      "effect": {
-        "type": "buyRealEstate",
-        "assetType": "building"
-      }
     }
   ],
   "autoProcesses": [
