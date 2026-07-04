@@ -37,9 +37,8 @@ const gameState = {
   // 有価証券
   securities: [],  // { id, name, cost, currentPrice, shares, trend, trendRemaining }
 
-  // 不動産
-  realEstates: [],       // 保有不動産リスト
-  unlockedJournals: [],  // 解放済み仕訳IDリスト（例：['012','013']）
+  // 固定資産の売却が解放されているか
+  fixedAssetSaleUnlocked: false,
 
   // ゲームパラメータ
   costRate: 0.70,
@@ -360,8 +359,6 @@ function addLabel(card, type, text) {
 // グレーアウト判定
 // -----------------------------------------------
 function isDisabled(j, amount) {
-  // 解放されていない仕訳はグレーアウト
-  if (j.locked && !gameState.unlockedJournals.includes(j.id)) return true;
   // 在庫チェック：在庫ゼロ、または売上原価が在庫残高を超える場合
   if (j.requiresStock) {
     const cogsAmt = Math.round(amount * gameState.costRate);
@@ -379,7 +376,6 @@ function isDisabled(j, amount) {
 }
 
 function disabledReason(j) {
-  if (j.locked && !gameState.unlockedJournals.includes(j.id)) return '🔒 不動産鑑定士との契約が必要です';
   if (j.requiresStock) return '🚫 在庫不足のため選択不可';
   if (j.id === '008') return '🚫 信用スコア不足（不渡り2回）';
   if (j.id === '009') return '🚫 信用スコア不足';
@@ -483,15 +479,18 @@ function applyJournal(j, amount, card) {
       gameState.cash -= amount;
       const dep = parseInt(card.dataset.depMonthly) || 0;
       const years = parseInt(card.dataset.usefulYears) || 5;
+      const costDown = parseFloat(card.dataset.costDown) || 0;
       gameState.fixedAssets.push({
         id: newId(), name: '機械装置', account: '機械装置',
         cost: amount, bookValue: amount, depPerMonth: dep,
         bookMethod: 'indirect', usefulYears: years,
-        accumulatedDep: 0, createdTurn: gameState.turn
+        accumulatedDep: 0, createdTurn: gameState.turn,
+        costDownEffect: costDown / 100,
+        slotEffect: 0,
       });
-      const costDown = parseFloat(card.dataset.costDown) || 0;
       if (costDown > 0) {
-        gameState.activeEffects.push({ label: `原価率-${costDown}%`, color: 'green', costDown });
+        const fa = gameState.fixedAssets[gameState.fixedAssets.length - 1];
+        gameState.activeEffects.push({ label: `原価率-${costDown}%`, color: 'green', costDown, _assetId: fa.id });
         // 翌月反映のため pendingCostDown に積む
         gameState._pendingCostDown = (gameState._pendingCostDown || 0) + costDown / 100;
       }
@@ -505,15 +504,18 @@ function applyJournal(j, amount, card) {
       gameState.cash -= amount;
       const dep = parseInt(card.dataset.depMonthly) || 0;
       const years = parseInt(card.dataset.usefulYears) || 30;
+      const costDown006 = parseFloat(card.dataset.costDown) || 0;
       gameState.fixedAssets.push({
         id: newId(), name: '建物', account: '建物',
         cost: amount, bookValue: amount, depPerMonth: dep,
         bookMethod: 'indirect', usefulYears: years,
-        accumulatedDep: 0, createdTurn: gameState.turn
+        accumulatedDep: 0, createdTurn: gameState.turn,
+        costDownEffect: costDown006 / 100,
+        slotEffect: 0,
       });
-      const costDown006 = parseFloat(card.dataset.costDown) || 0;
       if (costDown006 > 0) {
-        gameState.activeEffects.push({ label: `原価率-${costDown006}%`, color: 'green', costDown: costDown006 });
+        const fa = gameState.fixedAssets[gameState.fixedAssets.length - 1];
+        gameState.activeEffects.push({ label: `原価率-${costDown006}%`, color: 'green', costDown: costDown006, _assetId: fa.id });
         gameState._pendingCostDown = (gameState._pendingCostDown || 0) + costDown006 / 100;
       }
       addLog(gameState.turn + '月', `建物取得 <strong>${fmt(amount)}</strong>（耗用${years}年）`, false);
@@ -530,17 +532,13 @@ function applyJournal(j, amount, card) {
         id: newId(), name: 'ソフトウェア', account: 'ソフトウェア',
         cost: amount, bookValue: amount, depPerMonth: dep,
         bookMethod: 'direct', usefulYears: years,
-        accumulatedDep: 0, createdTurn: gameState.turn
+        accumulatedDep: 0, createdTurn: gameState.turn,
+        costDownEffect: 0,
+        slotEffect: 1,
       });
       gameState._pendingAddSlot = (gameState._pendingAddSlot || 0) + 1;
-      // activeEffectsは重複追加せず枠数を更新して表示
-      const slotEffect = gameState.activeEffects.find(e => e._type === 'slot');
-      if (slotEffect) {
-        slotEffect._count = (slotEffect._count || 1) + 1;
-        slotEffect.label = `選択肢+${slotEffect._count}枠`;
-      } else {
-        gameState.activeEffects.push({ label: '選択肢+1枠', color: 'blue', _type: 'slot', _count: 1 });
-      }
+      const fa = gameState.fixedAssets[gameState.fixedAssets.length - 1];
+      gameState.activeEffects.push({ label: '選択肢+1枠', color: 'blue', _type: 'slot', _assetId: fa.id });
       addLog(gameState.turn + '月', `ソフトウェア取得 <strong>${fmt(amount)}</strong>（耗用${years}年）`, false);
       break;
     }
@@ -549,61 +547,6 @@ function applyJournal(j, amount, card) {
     case '011': {
       if (gameState.cash < amount) { showAlert('現金が不足しています'); return; }
       buySecurities(amount);
-      break;
-    }
-
-    // 012: 土地購入
-    case '012': {
-      if (gameState.cash < amount) { showAlert('現金が不足しています'); return; }
-      gameState.cash -= amount;
-      const area = REAL_ESTATE_AREAS[Math.floor(Math.random() * REAL_ESTATE_AREAS.length)];
-      const trend = Math.random() > 0.5 ? 1 : -1;
-      const trendRemaining = Math.floor(Math.random() * 4) + 5; // 5〜8ターン
-      gameState.realEstates.push({
-        id: newId(),
-        name: `土地（${area}）`,
-        assetType: 'land',
-        account: '土地',
-        cost: amount,
-        currentPrice: amount,
-        bookValue: amount,
-        depPerMonth: 0,
-        accumulatedDep: 0,
-        trend,
-        trendRemaining,
-        createdTurn: gameState.turn,
-      });
-      addLog(gameState.turn + '月', `借）土地 ${fmt(amount)} ／ 貸）現金 ${fmt(amount)}`, false);
-      renderRealEstates();
-      break;
-    }
-
-    // 013: 建物（投資用）購入
-    case '013': {
-      if (gameState.cash < amount) { showAlert('現金が不足しています'); return; }
-      gameState.cash -= amount;
-      const years = parseInt(card.dataset.usefulYears) || randFrom(j.depreciation.usefulYearsOptions);
-      const depPerMonth = Math.round(amount / years / 12);
-      const area = REAL_ESTATE_AREAS[Math.floor(Math.random() * REAL_ESTATE_AREAS.length)];
-      const trend = Math.random() > 0.5 ? 1 : -1;
-      const trendRemaining = Math.floor(Math.random() * 4) + 5;
-      gameState.realEstates.push({
-        id: newId(),
-        name: `建物（${area}）`,
-        assetType: 'building',
-        account: '投資不動産（建物）',
-        cost: amount,
-        currentPrice: amount,
-        bookValue: amount,
-        depPerMonth,
-        accumulatedDep: 0,
-        trend,
-        trendRemaining,
-        createdTurn: gameState.turn,
-        usefulYears: years,
-      });
-      addLog(gameState.turn + '月', `借）投資不動産（建物） ${fmt(amount)} ／ 貸）現金 ${fmt(amount)}`, false);
-      renderRealEstates();
       break;
     }
 
@@ -670,9 +613,6 @@ function advanceTurn() {
 
   // 有価証券の時価更新
   updateSecuritiesPrices();
-
-  // 不動産の時価更新
-  updateRealEstatePrices();
 
   // 自動処理（給料・家賃）
   runAutoProcesses();
@@ -989,118 +929,135 @@ function renderSecurities() {
 }
 
 // -----------------------------------------------
-// 不動産関連
+// 固定資産の売却
 // -----------------------------------------------
-const REAL_ESTATE_AREAS = [
-  '渋谷区', '新宿区', '港区', '品川区', '目黒区',
-  '世田谷区', '中央区', '千代田区', '豊島区', '墨田区'
-];
-
-function updateRealEstatePrices() {
-  for (const re of gameState.realEstates) {
-    const minChange = 0.02, maxChange = 0.08;
-    const changeRate = minChange + Math.random() * (maxChange - minChange);
-    re.currentPrice = Math.round(re.currentPrice * (1 + re.trend * changeRate));
-    if (re.currentPrice < 100000) re.currentPrice = 100000;
-
-    re.trendRemaining--;
-    if (re.trendRemaining <= 0) {
-      re.trend = Math.random() > 0.4 ? -re.trend : re.trend;
-      re.trendRemaining = Math.floor(Math.random() * 4) + 5;
-    }
-  }
-  renderRealEstates();
-}
-
-function sellRealEstate(reId) {
-  const idx = gameState.realEstates.findIndex(r => r.id === reId);
-  if (idx === -1) return;
-  const re = gameState.realEstates[idx];
-
-  // 建物の場合：売却前に未計上分の減価償却を計上
-  if (re.assetType === 'building' && re.depPerMonth > 0) {
-    const depMonths = Math.max(0, gameState.turn - re.createdTurn);
-    const alreadyDepMonths = Math.round(re.accumulatedDep / re.depPerMonth);
-    const remainingMonths = Math.max(0, depMonths - alreadyDepMonths);
-
-    if (remainingMonths > 0) {
-      const dep = Math.min(re.depPerMonth * remainingMonths, re.bookValue);
-      re.bookValue      -= dep;
-      re.accumulatedDep += dep;
-      gameState.otherExpenses += dep;
-
-      addLog(gameState.turn + '月',
-        `借）減価償却費 ${fmt(dep)} ／ 貸）減価償却累計額（投資不動産） ${fmt(dep)}（売却前計上・${remainingMonths}ヶ月分）`, false);
-    }
-  }
-
-  // 売却処理（減価償却計上後の帳簿価額で計算）
-  const salePrice = re.currentPrice;
-  const bookValue = re.bookValue;
-  const gain = salePrice - bookValue;
-
-  gameState.cash += salePrice;
-
-  if (re.assetType === 'land') {
-    if (gain >= 0) {
-      gameState.sales += gain;
-      addLog(gameState.turn + '月',
-        `借）現金 ${fmt(salePrice)} ／ 貸）土地 ${fmt(bookValue)}・固定資産売却益 ${fmt(gain)}`, false);
-    } else {
-      gameState.otherExpenses += Math.abs(gain);
-      addLog(gameState.turn + '月',
-        `借）現金 ${fmt(salePrice)}・固定資産売却損 ${fmt(Math.abs(gain))} ／ 貸）土地 ${fmt(bookValue)}`, false);
-    }
-  } else {
-    const accDep = re.accumulatedDep;
-    if (gain >= 0) {
-      gameState.sales += gain;
-      addLog(gameState.turn + '月',
-        `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)} ／ 貸）投資不動産（建物） ${fmt(re.cost)}・固定資産売却益 ${fmt(gain)}`, false);
-    } else {
-      gameState.otherExpenses += Math.abs(gain);
-      addLog(gameState.turn + '月',
-        `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)}・固定資産売却損 ${fmt(Math.abs(gain))} ／ 貸）投資不動産（建物） ${fmt(re.cost)}`, false);
-    }
-  }
-
-  gameState.realEstates.splice(idx, 1);
-  renderAll();
-}
-
-function renderRealEstates() {
-  const panel = document.getElementById('realestate-panel');
-  const list  = document.getElementById('realestate-list');
+function renderFixedAssetList() {
+  const panel = document.getElementById('fixed-asset-sale-panel');
+  const list  = document.getElementById('fixed-asset-sale-list');
   if (!panel || !list) return;
 
-  if (gameState.realEstates.length === 0) {
+  if (gameState.fixedAssets.length === 0) {
     panel.style.display = 'none';
     return;
   }
   panel.style.display = 'block';
   list.innerHTML = '';
 
-  for (const re of gameState.realEstates) {
-    const gain = re.currentPrice - re.bookValue;
-    const gainPct = (gain / re.cost * 100).toFixed(1);
-    const isUp = gain >= 0;
-    const trendIcon = re.trend === 1 ? '📈' : '📉';
-    const typeIcon = re.assetType === 'land' ? '🏞️' : '🏢';
-
+  for (const fa of gameState.fixedAssets) {
     const el = document.createElement('div');
     el.className = 'sec-item';
+
+    const icon = fa.account === 'ソフトウェア' ? '💾'
+               : fa.account === '建物'         ? '🏢'
+               : '⚙️';
+
+    let effectText = '';
+    if (fa.costDownEffect > 0) {
+      effectText = `原価率-${(fa.costDownEffect * 100).toFixed(2)}%中`;
+    } else if (fa.slotEffect > 0) {
+      effectText = `選択肢+${fa.slotEffect}枠中`;
+    }
+
     el.innerHTML = `
       <div class="sec-top">
-        <span class="sec-name">${typeIcon} ${re.name}</span>
-        <button class="btn-sell" onclick="sellRealEstate('${re.id}')">売却</button>
+        <span class="sec-name">${icon} ${fa.name}</span>
+        ${gameState.fixedAssetSaleUnlocked
+          ? `<button class="btn-sell" onclick="sellFixedAsset('${fa.id}')">売却</button>`
+          : ''}
       </div>
       <div class="sec-prices">
-        <span class="sec-label">簿価</span><span>${fmt(re.bookValue)}</span>
-        <span class="sec-label">時価</span><span style="font-weight:700">${fmt(re.currentPrice)}</span>
-        <span class="sec-gain ${isUp ? 'up' : 'down'}">${trendIcon} ${isUp ? '+' : ''}${gainPct}%</span>
+        <span class="sec-label">帳簿価額</span>
+        <span style="font-weight:700">${fmt(fa.bookValue)}</span>
+        ${effectText ? `<span class="sec-gain up">${effectText}</span>` : ''}
       </div>`;
     list.appendChild(el);
   }
+}
+
+function sellFixedAsset(faId) {
+  const idx = gameState.fixedAssets.findIndex(fa => fa.id === faId);
+  if (idx === -1) return;
+  const fa = gameState.fixedAssets[idx];
+
+  // STEP A：売却前に未計上分の減価償却を月割りで計上する
+  const depMonths = Math.max(0, gameState.turn - fa.createdTurn);
+  const alreadyDepMonths = fa.depPerMonth > 0
+    ? Math.round(fa.accumulatedDep / fa.depPerMonth) : 0;
+  const remainingMonths = Math.max(0, depMonths - alreadyDepMonths);
+
+  if (remainingMonths > 0 && fa.depPerMonth > 0) {
+    const dep = Math.min(fa.depPerMonth * remainingMonths, fa.bookValue);
+
+    fa.bookValue      -= dep;
+    fa.accumulatedDep += dep;
+    gameState.otherExpenses += dep;
+
+    if (fa.bookMethod === 'indirect') {
+      addLog(gameState.turn + '月',
+        `借）減価償却費 ${fmt(dep)} ／ 貸）減価償却累計額 ${fmt(dep)}（売却前計上・${remainingMonths}ヶ月分）`, false);
+    } else {
+      addLog(gameState.turn + '月',
+        `借）減価償却費 ${fmt(dep)} ／ 貸）${fa.account} ${fmt(dep)}（売却前計上・${remainingMonths}ヶ月分）`, false);
+    }
+  }
+
+  // STEP B：売却金額を決める（帳簿価額の50〜150%のランダム）
+  const minPrice = Math.round(fa.bookValue * 0.5);
+  const maxPrice = Math.round(fa.bookValue * 1.5);
+  const step = Math.round(fa.bookValue * 0.1) || 10000;
+  const salePrice = randBetween(minPrice, maxPrice, step);
+
+  const bookValue = fa.bookValue;
+  const gain = salePrice - bookValue;
+
+  // STEP C：売却の仕訳を記録する
+  gameState.cash += salePrice;
+
+  if (fa.bookMethod === 'indirect') {
+    const accDep = fa.accumulatedDep;
+    if (gain >= 0) {
+      gameState.sales += gain;
+      addLog(gameState.turn + '月',
+        `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)} ／` +
+        ` 貸）${fa.account} ${fmt(fa.cost)}・固定資産売却益 ${fmt(gain)}`, false);
+    } else {
+      gameState.otherExpenses += Math.abs(gain);
+      addLog(gameState.turn + '月',
+        `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
+        ` 貸）${fa.account} ${fmt(fa.cost)}`, false);
+    }
+  } else {
+    if (gain >= 0) {
+      gameState.sales += gain;
+      addLog(gameState.turn + '月',
+        `借）現金 ${fmt(salePrice)} ／` +
+        ` 貸）${fa.account} ${fmt(bookValue)}・固定資産売却益 ${fmt(gain)}`, false);
+    } else {
+      gameState.otherExpenses += Math.abs(gain);
+      addLog(gameState.turn + '月',
+        `借）現金 ${fmt(salePrice)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
+        ` 貸）${fa.account} ${fmt(bookValue)}`, false);
+    }
+  }
+
+  // STEP D：この資産が持っていた効果を消す
+  if (fa.costDownEffect > 0) {
+    gameState.costRate = Math.min(0.999, gameState.costRate + fa.costDownEffect);
+    addLog(gameState.turn + '月',
+      `【効果消滅】原価率が+${(fa.costDownEffect * 100).toFixed(2)}%戻りました`, false);
+    gameState.activeEffects = gameState.activeEffects.filter(e => e._assetId !== fa.id);
+  }
+
+  if (fa.slotEffect > 0) {
+    gameState.cardSlots = Math.max(5, gameState.cardSlots - fa.slotEffect);
+    addLog(gameState.turn + '月',
+      `【効果消滅】選択肢の枠が${fa.slotEffect}枠減りました`, false);
+    gameState.activeEffects = gameState.activeEffects.filter(e => e._assetId !== fa.id);
+  }
+
+  // STEP E：資産リストから削除して画面を更新
+  gameState.fixedAssets.splice(idx, 1);
+  renderAll();
 }
 
 // -----------------------------------------------
@@ -1116,24 +1073,6 @@ function runClosing() {
 
   // 減価償却（まとめて計上）
   processDepreciation();
-
-  // 投資不動産（建物）の決算時減価償却
-  for (const re of gameState.realEstates) {
-    if (re.assetType !== 'building') continue;
-    if (re.bookValue <= 0) continue;
-
-    const totalDepMonths = Math.max(0, gameState.maxTurns - re.createdTurn);
-    const alreadyDepMonths = re.depPerMonth > 0
-      ? Math.round(re.accumulatedDep / re.depPerMonth) : 0;
-    const remainingMonths = Math.max(0, totalDepMonths - alreadyDepMonths);
-    if (remainingMonths <= 0) continue;
-
-    const dep = Math.min(re.depPerMonth * remainingMonths, re.bookValue);
-    re.bookValue      -= dep;
-    re.accumulatedDep += dep;
-    gameState.otherExpenses += dep;
-    addLog('決算', `投資不動産（建物）減価償却費 <strong>${fmt(dep)}</strong>（残り${remainingMonths}ヶ月分）`, true);
-  }
 
   // 貸倒引当金（売掛金残高×3%）
   const arTotal = gameState.receivables.reduce((s, r) => s + r.amount, 0);
@@ -1218,7 +1157,6 @@ function calcTotalAssets() {
     + gameState.receivables.reduce((s,r) => s + r.amount, 0)
     + gameState.inventory
     + gameState.securities.reduce((s,sec) => s + sec.currentPrice, 0)
-    + gameState.realEstates.reduce((s,re) => s + re.bookValue, 0)
     + gameState.fixedAssets.reduce((s,a) => s + a.bookValue, 0)
     + (gameState.fraudAssets || 0)
     + (gameState.cryptoAssets || 0);
@@ -1241,7 +1179,7 @@ function renderAll() {
   renderLog();
   renderEffects();
   renderSecurities();
-  renderRealEstates();
+  renderFixedAssetList();
 }
 
 function renderHeader() {
