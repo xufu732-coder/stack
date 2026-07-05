@@ -5,45 +5,53 @@
 // -----------------------------------------------
 // スコア計算
 // -----------------------------------------------
+// 資産・負債・純資産のリストから科目名で金額を探す
+function findAmount(list, name) {
+  const item = list.find(i => i.name === name);
+  return item ? item.amount : 0;
+}
+
 function computeFinalEvaluation() {
-  const cash = gameState.cash;
-  const ar = gameState.receivables.reduce((s, r) => s + r.amount, 0);
-  const inv = gameState.inventory;
-  const secValue = gameState.securities.reduce((s, sec) => s + sec.currentPrice, 0);
-  const faValue = gameState.fixedAssets.reduce((s, a) => s + a.bookValue, 0);
-  const fraudAssets = gameState.fraudAssets || 0;
-  const cryptoAssets = gameState.cryptoAssets || 0;
-  const totalAssets = calcTotalAssets();
+  // 勘定科目マスターに基づく総額方式の財務諸表データ
+  const bsData = buildBalanceSheet();
+  const plData = buildIncomeStatement();
 
-  const ap = gameState.payables.reduce((s, p) => s + p.amount, 0);
-  const stl = gameState.shortLoans.reduce((s, l) => s + l.principal, 0);
-  const ltl = gameState.longLoans.reduce((s, l) => s + l.remaining, 0);
-  const allowance = gameState.allowanceForDoubtful || 0;
-  const totalLiab = calcTotalLiabilities() + allowance;
+  const cash = findAmount(bsData.assets, '現金');
+  const ar = findAmount(bsData.assets, '売掛金');
+  const inv = findAmount(bsData.assets, '商品');
+  const secValue = findAmount(bsData.assets, '売買目的有価証券');
+  // 固定資産（純額）＝固定資産区分の合計（減価償却累計額のマイナスも含めて合算済み）
+  const faValue = bsData.assets
+    .filter(a => a.subCategory === '固定資産')
+    .reduce((s, a) => s + a.amount, 0);
+  const fraudAssets = findAmount(bsData.assets, '???資産');
+  const cryptoAssets = findAmount(bsData.assets, '暗号資産');
+  const totalAssets = bsData.totalAssets;
 
-  const capitalStock = gameState.capitalStock;
-  const retainedEarnings = gameState.retainedEarnings;
-  const equity = capitalStock + retainedEarnings;
-  const totalLiabEquity = totalLiab + equity;
+  const ap = findAmount(bsData.liabilities, '買掛金');
+  const stl = findAmount(bsData.liabilities, '短期借入金');
+  const ltl = findAmount(bsData.liabilities, '長期借入金');
+  // 貸倒引当金は勘定科目マスター上「資産のマイナス」科目のため資産の部から拾う
+  const allowance = Math.abs(findAmount(bsData.assets, '貸倒引当金'));
+  const totalLiab = bsData.totalLiabilities;
+
+  const capitalStock = findAmount(bsData.equity, '資本金');
+  const retainedEarnings = findAmount(bsData.equity, '利益剰余金');
+  const equity = bsData.totalEquity;
+  const totalLiabEquity = bsData.totalLiabilities + bsData.totalEquity;
 
   // ---- P/L 内訳 ----
-  const cogs = gameState.cogs;
-  const sga = gameState.sgaExpenses;
   const securityGains = gameState.securityGains || 0;
-  const securityLosses = gameState.securityLosses || 0;
   const assetGains = gameState.assetGains || 0;
-  const assetLosses = gameState.assetLosses || 0;
-  const interestExpenses = gameState.interestExpenses || 0;
-  const depreciationTotal = gameState.depreciationTotal || 0;
 
-  const salesLine = gameState.sales - securityGains - assetGains;
-  const grossProfit = salesLine - cogs;
-  const operatingProfit = grossProfit - sga;
-  const nonOpIncome = securityGains + assetGains;
-  const namedNonOpExpense = interestExpenses + depreciationTotal + securityLosses + assetLosses;
-  const miscExpense = Math.max(0, gameState.otherExpenses - namedNonOpExpense);
-  const nonOpExpense = namedNonOpExpense + miscExpense;
-  const netIncome = calcNetIncome();
+  const salesLine = plData.sales;
+  const cogs = plData.cogs;
+  const grossProfit = plData.grossProfit;
+  const sga = plData.sgaTotal;
+  const operatingProfit = plData.operatingProfit;
+  const nonOpIncome = plData.otherIncomeTotal;
+  const nonOpExpense = plData.otherExpenseTotal;
+  const netIncome = plData.netIncome;
 
   // ---- 安全性（30点） ----
   const currentAssets = cash + ar + inv + secValue;
@@ -138,13 +146,15 @@ function computeFinalEvaluation() {
 
   return {
     bs: {
-      cash, ar, inv, secValue, faValue, fraudAssets, cryptoAssets, totalAssets,
-      ap, stl, ltl, allowance, totalLiab, capitalStock, retainedEarnings, equity, totalLiabEquity
+      assetsList: bsData.assets,
+      liabilitiesList: bsData.liabilities,
+      equityList: bsData.equity,
+      totalAssets, totalLiab, totalEquity: equity, totalLiabEquity,
     },
     pl: {
-      salesLine, cogs, grossProfit, sga, operatingProfit,
-      nonOpIncome, securityGains, assetGains,
-      nonOpExpense, interestExpenses, depreciationTotal, securityLosses, assetLosses, miscExpense,
+      salesLine, cogs, grossProfit, sga, sgaItems: plData.sgaItems,
+      operatingProfit, nonOpIncome, otherIncomeItems: plData.otherIncomeItems,
+      nonOpExpense, otherExpenseItems: plData.otherExpenseItems,
       netIncome
     },
     scores: {
@@ -211,6 +221,11 @@ function bsRow(label, value, cls) {
   return `<div class="eval-row"><span class="eval-row-label">${label}</span><span class="eval-row-value ${cls || ''}">${fmt(value)}</span></div>`;
 }
 
+// 勘定科目マスターの{name, amount}アイテムを1行にする（マイナス科目は自動で赤色）
+function accountRow(item) {
+  return bsRow(item.name, item.amount, item.amount < 0 ? 'eval-negative' : '');
+}
+
 function renderFinalEvaluation(data) {
   const rankEl = document.getElementById('eval-rank-letter');
   rankEl.textContent = data.rank;
@@ -220,51 +235,38 @@ function renderFinalEvaluation(data) {
   document.getElementById('eval-style-badge').textContent = `${data.style.icon} ${data.style.name}`;
   document.getElementById('eval-style-comment').textContent = data.style.comment;
 
-  // B/S
+  // B/S（勘定科目マスターに基づく総額方式：貸倒引当金・減価償却累計額も別建てで表示）
   const bs = data.bs;
   document.getElementById('eval-bs-body').innerHTML = `
     <div class="eval-subtitle">資産の部</div>
-    ${bsRow('現金', bs.cash)}
-    ${bsRow('売掛金', bs.ar)}
-    ${bsRow('在庫', bs.inv)}
-    ${bsRow('有価証券（時価）', bs.secValue)}
-    ${bsRow('固定資産（純額）', bs.faValue)}
-    ${bs.fraudAssets > 0 ? bsRow('???資産', bs.fraudAssets, 'eval-negative') : ''}
-    ${bs.cryptoAssets > 0 ? bsRow('暗号資産', bs.cryptoAssets) : ''}
+    ${bs.assetsList.map(accountRow).join('')}
     <div class="eval-row eval-row-total"><span class="eval-row-label">資産合計</span><span class="eval-row-value">${fmt(bs.totalAssets)}</span></div>
 
     <div class="eval-subtitle" style="margin-top:10px;">負債の部</div>
-    ${bsRow('買掛金', bs.ap)}
-    ${bsRow('短期借入金', bs.stl)}
-    ${bsRow('長期借入金', bs.ltl)}
-    ${bs.allowance > 0 ? bsRow('貸倒引当金', bs.allowance) : ''}
+    ${bs.liabilitiesList.length ? bs.liabilitiesList.map(accountRow).join('') : bsRow('なし', 0)}
+    <div class="eval-row eval-row-sub"><span class="eval-row-label">負債合計</span><span class="eval-row-value">${fmt(bs.totalLiab)}</span></div>
 
     <div class="eval-subtitle" style="margin-top:10px;">純資産の部</div>
-    ${bsRow('資本金', bs.capitalStock)}
-    ${bsRow('利益剰余金', bs.retainedEarnings, bs.retainedEarnings >= 0 ? 'eval-positive' : 'eval-negative')}
+    ${bs.equityList.map(accountRow).join('')}
     <div class="eval-row eval-row-total"><span class="eval-row-label">負債純資産合計</span><span class="eval-row-value">${fmt(bs.totalLiabEquity)}</span></div>
   `;
 
-  // P/L
+  // P/L（勘定科目マスターに基づく総額方式：販管費・営業外収益・営業外費用を科目ごとに表示）
   const pl = data.pl;
   document.getElementById('eval-pl-body').innerHTML = `
     ${bsRow('売上高', pl.salesLine, 'eval-positive')}
     ${bsRow('売上原価', -pl.cogs, 'eval-negative')}
     <div class="eval-row eval-row-sub"><span class="eval-row-label">売上総利益</span><span class="eval-row-value ${pl.grossProfit >= 0 ? 'eval-positive' : 'eval-negative'}">${fmt(pl.grossProfit)}</span></div>
-    ${bsRow('販管費', -pl.sga, 'eval-negative')}
+
+    <div class="eval-subtitle" style="margin-top:6px;">販管費</div>
+    ${pl.sgaItems.length ? pl.sgaItems.map(i => bsRow(i.name, -i.amount, 'eval-negative')).join('') : bsRow('なし', 0)}
     <div class="eval-row eval-row-sub"><span class="eval-row-label">営業利益</span><span class="eval-row-value ${pl.operatingProfit >= 0 ? 'eval-positive' : 'eval-negative'}">${fmt(pl.operatingProfit)}</span></div>
 
     <div class="eval-subtitle" style="margin-top:10px;">営業外収益</div>
-    ${pl.securityGains > 0 ? bsRow('有価証券売却益', pl.securityGains, 'eval-positive') : ''}
-    ${pl.assetGains > 0 ? bsRow('固定資産売却益', pl.assetGains, 'eval-positive') : ''}
-    ${pl.nonOpIncome === 0 ? bsRow('なし', 0) : ''}
+    ${pl.otherIncomeItems.length ? pl.otherIncomeItems.map(i => bsRow(i.name, i.amount, 'eval-positive')).join('') : bsRow('なし', 0)}
 
     <div class="eval-subtitle" style="margin-top:10px;">営業外費用</div>
-    ${pl.interestExpenses > 0 ? bsRow('支払利息', -pl.interestExpenses, 'eval-negative') : ''}
-    ${pl.depreciationTotal > 0 ? bsRow('減価償却費', -pl.depreciationTotal, 'eval-negative') : ''}
-    ${pl.securityLosses > 0 ? bsRow('有価証券売却損', -pl.securityLosses, 'eval-negative') : ''}
-    ${pl.assetLosses > 0 ? bsRow('固定資産売却損', -pl.assetLosses, 'eval-negative') : ''}
-    ${pl.miscExpense > 0 ? bsRow('その他費用', -pl.miscExpense, 'eval-negative') : ''}
+    ${pl.otherExpenseItems.length ? pl.otherExpenseItems.map(i => bsRow(i.name, -i.amount, 'eval-negative')).join('') : bsRow('なし', 0)}
 
     <div class="eval-row eval-row-total"><span class="eval-row-label">当期純利益</span><span class="eval-row-value ${pl.netIncome >= 0 ? 'eval-positive' : 'eval-negative'}">${fmt(pl.netIncome)}</span></div>
   `;
