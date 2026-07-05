@@ -37,6 +37,10 @@ const gameState = {
   // 有価証券
   securities: [],  // { id, name, cost, currentPrice, shares, trend, trendRemaining }
 
+  // 勘定科目ごとの残高（財務諸表表示用の並行集計）
+  // 開始時点の現金・資本金（1,000万円ずつ）を初期値として持たせる
+  accountBalances: { '現金': 10000000, '資本金': 10000000 },
+
   // 固定資産の売却が解放されているか
   fixedAssetSaleUnlocked: false,
 
@@ -114,14 +118,173 @@ function recordMonthlySales(amount) {
 // -----------------------------------------------
 let journalMaster = [];
 let autoProcesses = [];
+let accountMaster = [];
 
 async function loadData() {
   const res = await fetch('./journals.json');
   const data = await res.json();
   journalMaster = data.journals;
   autoProcesses = data.autoProcesses;
+
+  const accountRes = await fetch('./accounts.json');
+  const accountData = await accountRes.json();
+  accountMaster = accountData.accounts;
+
   await loadEvents();
   init();
+}
+
+// -----------------------------------------------
+// 勘定科目マスター ヘルパー
+// -----------------------------------------------
+// 勘定科目名から、その科目の情報を取得する
+function getAccount(name) {
+  return accountMaster.find(a => a.name === name) || null;
+}
+
+// 財務諸表の特定の区分に属する科目を、表示順（code昇順）で返す
+function getAccountsBySubCategory(subCategory) {
+  return accountMaster
+    .filter(a => a.subCategory === subCategory)
+    .sort((a, b) => a.code - b.code);
+}
+
+// 特定の分類（資産・負債・純資産・収益・費用）に属する科目を返す
+function getAccountsByCategory(category) {
+  return accountMaster
+    .filter(a => a.category === category)
+    .sort((a, b) => a.code - b.code);
+}
+
+// 勘定科目の残高を更新する
+// debitOrCredit: 'debit'（借方）または 'credit'（貸方）
+// amount: 金額（正の数）
+function updateAccountBalance(accountName, debitOrCredit, amount) {
+  const account = getAccount(accountName);
+  if (!account) return;
+
+  if (!gameState.accountBalances[accountName]) {
+    gameState.accountBalances[accountName] = 0;
+  }
+
+  // その科目が「借方」「貸方」どちらの記録で残高が増えるかを決める。
+  // 資産・費用は通常「借方」で増える。負債・純資産・収益は通常「貸方」で増える。
+  // direction=-1（貸倒引当金・減価償却累計額・自己株式）は相手科目の価値を
+  // 減らすためだけの特殊科目なので、増える方向が逆になる。
+  const debitIsIncrease =
+    (account.category === '資産' || account.category === '費用')
+      ? account.direction === 1
+      : account.direction === -1;
+
+  const isIncrease = debitOrCredit === 'debit' ? debitIsIncrease : !debitIsIncrease;
+
+  gameState.accountBalances[accountName] += isIncrease ? amount : -amount;
+}
+
+// -----------------------------------------------
+// 財務諸表データ生成
+// -----------------------------------------------
+function buildBalanceSheet() {
+  const result = {
+    assets: [],
+    liabilities: [],
+    equity: [],
+    totalAssets: 0,
+    totalLiabilities: 0,
+    totalEquity: 0,
+  };
+
+  const allAccounts = accountMaster.slice().sort((a, b) => a.code - b.code);
+
+  for (const account of allAccounts) {
+    const balance = gameState.accountBalances[account.name] || 0;
+    if (balance === 0) continue;
+
+    // direction=-1の科目（貸倒引当金・減価償却累計額など）は相手科目の価値を
+    // 減らすためだけの科目なので、マイナス表示にして合計からも差し引く
+    const displayAmount = balance * account.direction;
+
+    const item = {
+      name: account.name,
+      subCategory: account.subCategory,
+      amount: displayAmount,
+      direction: account.direction,
+      code: account.code,
+    };
+
+    if (account.category === '資産') {
+      result.assets.push(item);
+      result.totalAssets += displayAmount;
+    } else if (account.category === '負債') {
+      result.liabilities.push(item);
+      result.totalLiabilities += displayAmount;
+    } else if (account.category === '純資産') {
+      result.equity.push(item);
+      result.totalEquity += displayAmount;
+    }
+  }
+
+  // 利益剰余金がaccountBalancesにまだ計上されていない場合（決算前など）は
+  // 当期純利益を仮の利益剰余金として反映する
+  if (!gameState.accountBalances['利益剰余金']) {
+    const netIncome = calcNetIncome();
+    result.equity.push({
+      name: '利益剰余金',
+      subCategory: '株主資本',
+      amount: netIncome,
+      direction: 1,
+      code: 603,
+    });
+    result.totalEquity += netIncome;
+  }
+
+  return result;
+}
+
+function buildIncomeStatement() {
+  const result = {
+    sales: 0,
+    cogs: 0,
+    grossProfit: 0,
+    sgaItems: [],
+    sgaTotal: 0,
+    operatingProfit: 0,
+    otherIncomeItems: [],
+    otherIncomeTotal: 0,
+    otherExpenseItems: [],
+    otherExpenseTotal: 0,
+    netIncome: 0,
+  };
+
+  const allAccounts = accountMaster.slice().sort((a, b) => a.code - b.code);
+
+  for (const account of allAccounts) {
+    const balance = gameState.accountBalances[account.name] || 0;
+    if (balance === 0) continue;
+
+    if (account.subCategory === '売上高') {
+      result.sales += balance;
+    } else if (account.subCategory === '売上原価') {
+      result.cogs += balance;
+    } else if (account.subCategory === '販売費及び一般管理費') {
+      result.sgaItems.push({ name: account.name, amount: balance });
+      result.sgaTotal += balance;
+    } else if (account.subCategory === '営業外収益') {
+      result.otherIncomeItems.push({ name: account.name, amount: balance });
+      result.otherIncomeTotal += balance;
+    } else if (account.subCategory === '営業外費用') {
+      result.otherExpenseItems.push({ name: account.name, amount: balance });
+      result.otherExpenseTotal += balance;
+    }
+  }
+
+  result.grossProfit     = result.sales - result.cogs;
+  result.operatingProfit = result.grossProfit - result.sgaTotal;
+  result.netIncome        = result.operatingProfit
+                          + result.otherIncomeTotal
+                          - result.otherExpenseTotal;
+
+  return result;
 }
 
 // -----------------------------------------------
@@ -455,6 +618,10 @@ function applyJournal(j, amount, card) {
       gameState.sales += amount;
       gameState.cogs  += cogsAmount;
       recordMonthlySales(amount);
+      updateAccountBalance('売掛金', 'debit', amount);
+      updateAccountBalance('商品売上', 'credit', amount);
+      updateAccountBalance('商品売上原価', 'debit', cogsAmount);
+      updateAccountBalance('商品', 'credit', cogsAmount);
       addLog(gameState.turn + '月', `掛け売上 <strong>${fmt(amount)}</strong>（${settleMo}ヶ月後回収）`, false);
       break;
     }
@@ -467,6 +634,10 @@ function applyJournal(j, amount, card) {
       gameState.sales += amount;
       gameState.cogs  += cogsAmount;
       recordMonthlySales(amount);
+      updateAccountBalance('現金', 'debit', amount);
+      updateAccountBalance('商品売上', 'credit', amount);
+      updateAccountBalance('商品売上原価', 'debit', cogsAmount);
+      updateAccountBalance('商品', 'credit', cogsAmount);
       addLog(gameState.turn + '月', `現金売上 <strong>${fmt(amount)}</strong>`, false);
       break;
     }
@@ -478,6 +649,8 @@ function applyJournal(j, amount, card) {
       gameState.sgaExpenses += amount;
       const pct = parseFloat(card.dataset.salesCapPct) || 0;
       gameState.pendingSalesCapBonus = pct / 100;
+      updateAccountBalance('広告宣伝費', 'debit', amount);
+      updateAccountBalance('現金', 'credit', amount);
       addLog(gameState.turn + '月', `広告宣伝費 <strong>${fmt(amount)}</strong>（翌月売上上限+${pct}%）`, false);
       break;
     }
@@ -487,6 +660,8 @@ function applyJournal(j, amount, card) {
       const settleMo = parseInt(card.dataset.settleMo) || 2;
       gameState.payables.push({ id: newId(), amount, remaining: settleMo, createdTurn: gameState.turn });
       gameState.inventory += amount;
+      updateAccountBalance('商品', 'debit', amount);
+      updateAccountBalance('買掛金', 'credit', amount);
       addLog(gameState.turn + '月', `掛け仕入 <strong>${fmt(amount)}</strong>（${settleMo}ヶ月後支払）`, false);
       break;
     }
@@ -512,6 +687,8 @@ function applyJournal(j, amount, card) {
         // 翌月反映のため pendingCostDown に積む
         gameState._pendingCostDown = (gameState._pendingCostDown || 0) + costDown / 100;
       }
+      updateAccountBalance('機械装置', 'debit', amount);
+      updateAccountBalance('現金', 'credit', amount);
       addLog(gameState.turn + '月', `機械装置取得 <strong>${fmt(amount)}</strong>（耗用${years}年）`, false);
       break;
     }
@@ -536,6 +713,8 @@ function applyJournal(j, amount, card) {
         gameState.activeEffects.push({ label: `原価率-${costDown006}%`, color: 'green', costDown: costDown006, _assetId: fa.id });
         gameState._pendingCostDown = (gameState._pendingCostDown || 0) + costDown006 / 100;
       }
+      updateAccountBalance('建物', 'debit', amount);
+      updateAccountBalance('現金', 'credit', amount);
       addLog(gameState.turn + '月', `建物取得 <strong>${fmt(amount)}</strong>（耗用${years}年）`, false);
       break;
     }
@@ -557,6 +736,8 @@ function applyJournal(j, amount, card) {
       gameState._pendingAddSlot = (gameState._pendingAddSlot || 0) + 1;
       const fa = gameState.fixedAssets[gameState.fixedAssets.length - 1];
       gameState.activeEffects.push({ label: '選択肢+1枠', color: 'blue', _type: 'slot', _assetId: fa.id });
+      updateAccountBalance('ソフトウェア', 'debit', amount);
+      updateAccountBalance('現金', 'credit', amount);
       addLog(gameState.turn + '月', `ソフトウェア取得 <strong>${fmt(amount)}</strong>（耗用${years}年）`, false);
       break;
     }
@@ -581,6 +762,9 @@ function applyJournal(j, amount, card) {
         id: newId(), principal: amount, remaining: months,
         interestRate: rate
       });
+      updateAccountBalance('現金', 'debit', actualCash);
+      updateAccountBalance('支払利息', 'debit', interest);
+      updateAccountBalance('短期借入金', 'credit', amount);
       addLog(gameState.turn + '月',
         `短期借入 <strong>${fmt(amount)}</strong>（実入金${fmt(actualCash)}、支払利息${fmt(interest)}、${months}ヶ月後返済）`, false);
       break;
@@ -596,6 +780,8 @@ function applyJournal(j, amount, card) {
         id: newId(), principal: amount, remaining: amount,
         monthlyPrincipal, interestRate: rate
       });
+      updateAccountBalance('現金', 'debit', amount);
+      updateAccountBalance('長期借入金', 'credit', amount);
       addLog(gameState.turn + '月',
         `長期借入 <strong>${fmt(amount)}</strong>（利率${(rate*100).toFixed(2)}%、${years}年返済）`, false);
       break;
@@ -611,6 +797,8 @@ function applyJournal(j, amount, card) {
       else                                  actualAmount = Math.min(amount, cfg.normalMax);
       gameState.cash         += actualAmount;
       gameState.capitalStock += actualAmount;
+      updateAccountBalance('現金', 'debit', actualAmount);
+      updateAccountBalance('資本金', 'credit', actualAmount);
       addLog(gameState.turn + '月', `増資 <strong>${fmt(actualAmount)}</strong>`, false);
       break;
     }
@@ -689,6 +877,8 @@ function runAutoProcesses() {
   for (const ap of autoProcesses) {
     gameState.cash -= ap.amount;
     gameState.sgaExpenses += ap.amount;
+    updateAccountBalance(ap.debit, 'debit', ap.amount);
+    updateAccountBalance(ap.credit, 'credit', ap.amount);
     addLog(gameState.turn + '月', `${ap.name} <strong>${fmt(ap.amount)}</strong>（自動）`, true);
     addNotice('orange', '💴', ap.name, `${fmt(ap.amount)} を現金から支払いました`);
   }
@@ -703,6 +893,8 @@ function processSettlements() {
     r.remaining--;
     if (r.remaining <= 0) {
       gameState.cash += r.amount;
+      updateAccountBalance('現金', 'debit', r.amount);
+      updateAccountBalance('売掛金', 'credit', r.amount);
       addLog(gameState.turn + '月', `売掛金 <strong>${fmt(r.amount)}</strong> を自動回収`, true);
       addNotice('green', '💰', '売掛金の回収', `${fmt(r.amount)} が現金に入金されました`);
     }
@@ -716,6 +908,8 @@ function processSettlements() {
     if (p.remaining <= 0) {
       if (gameState.cash >= p.amount) {
         gameState.cash -= p.amount;
+        updateAccountBalance('買掛金', 'debit', p.amount);
+        updateAccountBalance('現金', 'credit', p.amount);
         addLog(gameState.turn + '月', `買掛金 <strong>${fmt(p.amount)}</strong> を自動決済`, true);
         addNotice('blue', '🧾', '買掛金の支払い', `${fmt(p.amount)} を現金から支払いました`);
       } else {
@@ -738,6 +932,8 @@ function processSettlements() {
     if (l.remaining <= 0) {
       if (gameState.cash >= l.principal) {
         gameState.cash -= l.principal;
+        updateAccountBalance('短期借入金', 'debit', l.principal);
+        updateAccountBalance('現金', 'credit', l.principal);
         addLog(gameState.turn + '月', `短期借入金 <strong>${fmt(l.principal)}</strong> を自動返済`, true);
         addNotice('blue', '🏦', '短期借入金の返済', `元金 ${fmt(l.principal)} を返済しました`);
       } else {
@@ -787,6 +983,12 @@ function processDepreciation() {
     fa.accumulatedDep += dep;
     gameState.otherExpenses += dep;
     gameState.depreciationTotal += dep;
+    updateAccountBalance('減価償却費', 'debit', dep);
+    if (fa.bookMethod === 'indirect') {
+      updateAccountBalance('減価償却累計額', 'credit', dep);
+    } else {
+      updateAccountBalance(fa.account, 'credit', dep);
+    }
     addLog('決算',
       `${fa.name} 減価償却費 <strong>${fmt(dep)}</strong>（${depMonths}ヶ月分・帳簿価額 ${fmt(fa.bookValue)}）`, true);
   }
@@ -808,6 +1010,9 @@ function processLongLoanRepayment() {
       l.remaining -= principal;
       gameState.otherExpenses += interest;
       gameState.interestExpenses += interest;
+      updateAccountBalance('長期借入金', 'debit', principal);
+      updateAccountBalance('支払利息', 'debit', interest);
+      updateAccountBalance('現金', 'credit', total);
       addLog(gameState.turn + '月',
         `長期借入返済 元金<strong>${fmt(principal)}</strong> + 利息${fmt(interest)}`, true);
       addNotice('blue', '🏦', '長期借入金の返済', `元金 ${fmt(principal)} + 利息 ${fmt(interest)} を返済しました`);
@@ -847,6 +1052,8 @@ function buySecurities(amount) {
     trendRemaining,
   });
   gameState.cash -= amount;
+  updateAccountBalance('売買目的有価証券', 'debit', amount);
+  updateAccountBalance('現金', 'credit', amount);
   addLog(gameState.turn + '月', `売買目的有価証券購入 <strong>${name}</strong> ${fmt(amount)}`, false);
   addNotice('blue', '📈', '有価証券を購入しました', `${name} ${fmt(amount)}`);
   renderSecurities();
@@ -887,12 +1094,16 @@ function executeSellSecurity(secId) {
   const sec = gameState.securities[idx];
   const gain = sec.currentPrice - sec.cost;
   gameState.cash += sec.currentPrice;
+  updateAccountBalance('現金', 'debit', sec.currentPrice);
+  updateAccountBalance('売買目的有価証券', 'credit', sec.cost);
   if (gain >= 0) {
     gameState.sales += gain;
     gameState.securityGains += gain;
+    if (gain > 0) updateAccountBalance('有価証券売却益', 'credit', gain);
   } else {
     gameState.otherExpenses += Math.abs(gain);
     gameState.securityLosses += Math.abs(gain);
+    updateAccountBalance('有価証券売却損', 'debit', Math.abs(gain));
   }
 
   // 仕訳エントリHTML生成
@@ -1123,11 +1334,14 @@ function executeSellFixedAsset(faId) {
     fa.accumulatedDep += dep;
     gameState.otherExpenses += dep;
     gameState.depreciationTotal += dep;
+    updateAccountBalance('減価償却費', 'debit', dep);
 
     if (fa.bookMethod === 'indirect') {
+      updateAccountBalance('減価償却累計額', 'credit', dep);
       addLog(gameState.turn + '月',
         `借）減価償却費 ${fmt(dep)} ／ 貸）減価償却累計額 ${fmt(dep)}（売却前計上・${remainingMonths}ヶ月分）`, false);
     } else {
+      updateAccountBalance(fa.account, 'credit', dep);
       addLog(gameState.turn + '月',
         `借）減価償却費 ${fmt(dep)} ／ 貸）${fa.account} ${fmt(dep)}（売却前計上・${remainingMonths}ヶ月分）`, false);
     }
@@ -1138,32 +1352,40 @@ function executeSellFixedAsset(faId) {
   const gain = salePrice - bookValue;
 
   gameState.cash += salePrice;
+  updateAccountBalance('現金', 'debit', salePrice);
 
   if (fa.bookMethod === 'indirect') {
     const accDep = fa.accumulatedDep;
+    updateAccountBalance('減価償却累計額', 'debit', accDep);
+    updateAccountBalance(fa.account, 'credit', fa.cost);
     if (gain >= 0) {
       gameState.sales += gain;
       gameState.assetGains += gain;
+      if (gain > 0) updateAccountBalance('固定資産売却益', 'credit', gain);
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)} ／` +
         ` 貸）${fa.account} ${fmt(fa.cost)}・固定資産売却益 ${fmt(gain)}`, false);
     } else {
       gameState.otherExpenses += Math.abs(gain);
       gameState.assetLosses += Math.abs(gain);
+      updateAccountBalance('固定資産売却損', 'debit', Math.abs(gain));
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
         ` 貸）${fa.account} ${fmt(fa.cost)}`, false);
     }
   } else {
+    updateAccountBalance(fa.account, 'credit', bookValue);
     if (gain >= 0) {
       gameState.sales += gain;
       gameState.assetGains += gain;
+      if (gain > 0) updateAccountBalance('固定資産売却益', 'credit', gain);
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)} ／` +
         ` 貸）${fa.account} ${fmt(bookValue)}・固定資産売却益 ${fmt(gain)}`, false);
     } else {
       gameState.otherExpenses += Math.abs(gain);
       gameState.assetLosses += Math.abs(gain);
+      updateAccountBalance('固定資産売却損', 'debit', Math.abs(gain));
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
         ` 貸）${fa.account} ${fmt(bookValue)}`, false);
@@ -1233,6 +1455,8 @@ function runClosing() {
     const allowance = Math.round(arTotal * 0.03);
     gameState.allowanceForDoubtful = allowance;
     gameState.otherExpenses += allowance;
+    updateAccountBalance('貸倒引当金繰入', 'debit', allowance);
+    updateAccountBalance('貸倒引当金', 'credit', allowance);
     addLog('決算', `貸倒引当金繰入 <strong>${fmt(allowance)}</strong>（売掛金×3%）`, true);
   }
 
@@ -1241,9 +1465,11 @@ function runClosing() {
     const diff = sec.currentPrice - sec.cost;
     if (diff > 0) {
       gameState.sales += diff;
+      updateAccountBalance('有価証券売却益', 'credit', diff);
       addLog('決算', `${sec.name} 有価証券評価益 <strong>${fmt(diff)}</strong>`, true);
     } else if (diff < 0) {
       gameState.otherExpenses += Math.abs(diff);
+      updateAccountBalance('有価証券売却損', 'debit', Math.abs(diff));
       addLog('決算', `${sec.name} 有価証券評価損 <strong>${fmt(Math.abs(diff))}</strong>`, true);
     }
     // 帳簿価額を時価に洗替え
