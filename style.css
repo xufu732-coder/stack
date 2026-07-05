@@ -601,3 +601,172 @@ header h1 { font-size: 1.05rem; font-weight: 700; letter-spacing: 0.05em; }
   font-weight: 600;
   color: var(--text);
 }
+
+/* ===== 最終評価画面 ===== */
+.eval-modal-box {
+  max-width: 760px;
+  max-height: 88vh;
+}
+
+.eval-hero {
+  text-align: center;
+  padding: 10px 0 20px;
+  border-bottom: 1px solid var(--bg);
+  margin-bottom: 16px;
+}
+.eval-rank {
+  display: inline-block;
+  font-size: 4rem;
+  font-weight: 900;
+  line-height: 1;
+  animation: evalRankPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes evalRankPop {
+  0%   { opacity: 0; transform: scale(0.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.eval-rank-s { color: #D4A017; text-shadow: 0 0 16px rgba(212,160,23,0.4); }
+.eval-rank-a { color: var(--primary); }
+.eval-rank-b { color: var(--success); }
+.eval-rank-c { color: var(--warning); }
+.eval-rank-d { color: var(--danger); }
+
+.eval-score-line {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 4px;
+}
+.eval-score-num { font-size: 1.6rem; color: var(--primary); }
+
+.eval-style-badge {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 6px 16px;
+  background: var(--card-bg);
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary-d);
+}
+.eval-style-comment {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--text-sub);
+  line-height: 1.6;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.eval-bs-pl-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 600px) {
+  .eval-bs-pl-grid { grid-template-columns: 1fr; }
+}
+.eval-col-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--primary);
+  margin-bottom: 6px;
+}
+.eval-subtitle {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-sub);
+  margin-bottom: 2px;
+}
+.eval-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  padding: 3px 0;
+  color: var(--text);
+}
+.eval-row-label { color: var(--text-sub); }
+.eval-row-value { font-weight: 600; }
+.eval-row-sub {
+  border-top: 1px dashed var(--border);
+  margin-top: 2px;
+  padding-top: 4px;
+  font-weight: 700;
+}
+.eval-row-total {
+  border-top: 2px solid var(--border);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-weight: 700;
+}
+.eval-positive { color: var(--success); }
+.eval-negative { color: var(--danger); }
+
+.eval-score-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 8px;
+}
+.score-bar-row {
+  background: var(--card-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.score-bar-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.score-bar-track {
+  background: var(--border);
+  border-radius: 6px;
+  height: 10px;
+  overflow: hidden;
+}
+.score-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 6px;
+  transition: width 0.8s ease;
+}
+.score-bar-detail {
+  font-size: 0.72rem;
+  color: var(--text-sub);
+  margin-top: 6px;
+}
+.score-bar-comment {
+  font-size: 0.78rem;
+  color: var(--text);
+  margin-top: 4px;
+}
+
+.eval-penalty-box {
+  margin-top: 16px;
+  background: #FEE2E2;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.eval-penalty-box.hidden { display: none; }
+.eval-penalty-title {
+  font-weight: 700;
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+.eval-penalty-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.eval-replay-btn {
+  padding: 12px 40px;
+  font-size: 1rem;
+}
