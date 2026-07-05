@@ -219,7 +219,45 @@
   </div>
 </div>
 
+<!-- 最終評価画面 -->
+<div class="modal-overlay hidden" id="final-eval-modal">
+  <div class="modal-box eval-modal-box">
+    <div class="modal-body">
+
+      <div class="eval-hero">
+        <div class="eval-rank eval-rank-s" id="eval-rank-letter">S</div>
+        <div class="eval-score-line">
+          <span class="eval-score-num" id="eval-score-num">0</span><span id="eval-score-max-label">点 / 100点</span>
+        </div>
+        <div class="eval-style-badge" id="eval-style-badge">📈 トレーダー型経営者</div>
+        <div class="eval-style-comment" id="eval-style-comment"></div>
+      </div>
+
+      <div class="eval-bs-pl-grid">
+        <div class="eval-bs-col">
+          <div class="eval-col-title">貸借対照表（B/S）</div>
+          <div id="eval-bs-body"></div>
+        </div>
+        <div class="eval-pl-col">
+          <div class="eval-col-title">損益計算書（P/L）</div>
+          <div id="eval-pl-body"></div>
+        </div>
+      </div>
+
+      <div class="eval-col-title" style="margin-top:20px;">経営指標スコア</div>
+      <div class="eval-score-bars" id="eval-score-bars"></div>
+
+      <div class="eval-penalty-box hidden" id="eval-penalty-box"></div>
+
+      <div style="text-align:center;margin-top:20px;">
+        <button class="btn-modal-ok eval-replay-btn" onclick="location.reload()">もう一度プレイ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="main.js"></script>
 <script src="eventManager.js"></script>
+<script src="evaluation.js"></script>
 </body>
 </html>

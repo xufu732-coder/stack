@@ -136,6 +136,7 @@ function applyEventEffect(ev, choice) {
 
     case 'cashIn':
       gameState.cash += effect.amount;
+      gameState.sales += effect.amount;
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）雑収入 ${fmt(effect.amount)}`, false);
       break;
 
@@ -291,6 +292,7 @@ function applyEventEffect(ev, choice) {
 
     case 'subsidy':
       gameState.cash += effect.amount;
+      gameState.sales += effect.amount;
       gameState._pendingCostDown = (gameState._pendingCostDown || 0) + effect.costRateDown;
       gameState.activeEffects.push({ label: `原価率-${Math.round(effect.costRateDown*100)}%`, color: 'green' });
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）補助金収入 ${fmt(effect.amount)}（原価率-${Math.round(effect.costRateDown*100)}%）`, false);
@@ -325,6 +327,7 @@ function applyEventEffect(ev, choice) {
         gameState.sales += effect.sales;
         gameState.cogs += cogsAmt;
         gameState.inventory -= cogsAmt;
+        recordMonthlySales(effect.sales);
         addLog(gameState.turn + '月',
           `【イベント】${ev.name}：借）仕入 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}<br>借）現金 ${fmt(effect.sales)} ／ 貸）商品売上 ${fmt(effect.sales)}`, false);
       }
@@ -338,6 +341,7 @@ function applyEventEffect(ev, choice) {
         gameState.sales += effect.sales;
         gameState.cogs += cogsFromStock;
         gameState.inventory -= cogsFromStock;
+        recordMonthlySales(effect.sales);
         addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.sales)} ／ 貸）商品売上 ${fmt(effect.sales)}`, false);
       } else {
         result.message = '在庫が不足していたため、失注しました。';
@@ -432,6 +436,7 @@ function resolveDelayedEffects() {
         } else {
           gameState.cryptoAssets = (gameState.cryptoAssets || 0) - g.amount;
           gameState.otherExpenses += g.amount;
+          gameState._hadGamblingLoss = true;
           addLog(gameState.turn + '月', `【ギャンブル結果】${g.name}：借）暗号資産売却損 ${fmt(g.amount)} ／ 貸）暗号資産 ${fmt(g.amount)}`, false);
           addNotice('red', '💸', 'ギャンブル失敗', '投資額が消滅しました');
         }

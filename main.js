@@ -61,6 +61,16 @@ const gameState = {
   _fraudGameOverRate: 0,
   fraudAssets: 0,   // 粉飾決算による架空資産（???資産）
   cryptoAssets: 0,  // 暗号資産投資の帳簿価額
+  _hadGamblingLoss: false, // 仮想通貨投資で損失を出したことがあるか（経営スタイル判定用）
+
+  // 最終評価画面のための集計値
+  monthlySales: [],         // 各月の売上金額（月次成長率の計算に使用）
+  securityGains: 0,         // 有価証券売却益の累計
+  securityLosses: 0,        // 有価証券売却損の累計
+  assetGains: 0,            // 固定資産売却益の累計
+  assetLosses: 0,           // 固定資産売却損の累計
+  interestExpenses: 0,      // 支払利息の累計
+  depreciationTotal: 0,     // 減価償却費の累計
 
   // 仕訳ログ
   logs: [
@@ -92,6 +102,12 @@ function randFrom(arr) {
 
 let idCounter = 0;
 function newId() { return 'id_' + (++idCounter); }
+
+// 月次売上高を記録する（最終評価画面の売上成長率の計算用）
+function recordMonthlySales(amount) {
+  const idx = gameState.turn - 1;
+  gameState.monthlySales[idx] = (gameState.monthlySales[idx] || 0) + amount;
+}
 
 // -----------------------------------------------
 // データ読み込み
@@ -438,6 +454,7 @@ function applyJournal(j, amount, card) {
       gameState.inventory -= cogsAmount;
       gameState.sales += amount;
       gameState.cogs  += cogsAmount;
+      recordMonthlySales(amount);
       addLog(gameState.turn + '月', `掛け売上 <strong>${fmt(amount)}</strong>（${settleMo}ヶ月後回収）`, false);
       break;
     }
@@ -449,6 +466,7 @@ function applyJournal(j, amount, card) {
       gameState.inventory -= cogsAmount;
       gameState.sales += amount;
       gameState.cogs  += cogsAmount;
+      recordMonthlySales(amount);
       addLog(gameState.turn + '月', `現金売上 <strong>${fmt(amount)}</strong>`, false);
       break;
     }
@@ -558,6 +576,7 @@ function applyJournal(j, amount, card) {
       const actualCash = amount - interest;
       gameState.cash += actualCash;
       gameState.otherExpenses += interest;  // 支払利息として即時費用計上
+      gameState.interestExpenses += interest;
       gameState.shortLoans.push({
         id: newId(), principal: amount, remaining: months,
         interestRate: rate
@@ -767,6 +786,7 @@ function processDepreciation() {
     fa.bookValue      -= dep;
     fa.accumulatedDep += dep;
     gameState.otherExpenses += dep;
+    gameState.depreciationTotal += dep;
     addLog('決算',
       `${fa.name} 減価償却費 <strong>${fmt(dep)}</strong>（${depMonths}ヶ月分・帳簿価額 ${fmt(fa.bookValue)}）`, true);
   }
@@ -787,6 +807,7 @@ function processLongLoanRepayment() {
       gameState.cash -= total;
       l.remaining -= principal;
       gameState.otherExpenses += interest;
+      gameState.interestExpenses += interest;
       addLog(gameState.turn + '月',
         `長期借入返済 元金<strong>${fmt(principal)}</strong> + 利息${fmt(interest)}`, true);
       addNotice('blue', '🏦', '長期借入金の返済', `元金 ${fmt(principal)} + 利息 ${fmt(interest)} を返済しました`);
@@ -868,8 +889,10 @@ function executeSellSecurity(secId) {
   gameState.cash += sec.currentPrice;
   if (gain >= 0) {
     gameState.sales += gain;
+    gameState.securityGains += gain;
   } else {
     gameState.otherExpenses += Math.abs(gain);
+    gameState.securityLosses += Math.abs(gain);
   }
 
   // 仕訳エントリHTML生成
@@ -1099,6 +1122,7 @@ function executeSellFixedAsset(faId) {
     fa.bookValue      -= dep;
     fa.accumulatedDep += dep;
     gameState.otherExpenses += dep;
+    gameState.depreciationTotal += dep;
 
     if (fa.bookMethod === 'indirect') {
       addLog(gameState.turn + '月',
@@ -1119,11 +1143,13 @@ function executeSellFixedAsset(faId) {
     const accDep = fa.accumulatedDep;
     if (gain >= 0) {
       gameState.sales += gain;
+      gameState.assetGains += gain;
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)} ／` +
         ` 貸）${fa.account} ${fmt(fa.cost)}・固定資産売却益 ${fmt(gain)}`, false);
     } else {
       gameState.otherExpenses += Math.abs(gain);
+      gameState.assetLosses += Math.abs(gain);
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・減価償却累計額 ${fmt(accDep)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
         ` 貸）${fa.account} ${fmt(fa.cost)}`, false);
@@ -1131,11 +1157,13 @@ function executeSellFixedAsset(faId) {
   } else {
     if (gain >= 0) {
       gameState.sales += gain;
+      gameState.assetGains += gain;
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)} ／` +
         ` 貸）${fa.account} ${fmt(bookValue)}・固定資産売却益 ${fmt(gain)}`, false);
     } else {
       gameState.otherExpenses += Math.abs(gain);
+      gameState.assetLosses += Math.abs(gain);
       addLog(gameState.turn + '月',
         `借）現金 ${fmt(salePrice)}・固定資産売却損 ${fmt(Math.abs(gain))} ／` +
         ` 貸）${fa.account} ${fmt(bookValue)}`, false);
@@ -1240,42 +1268,8 @@ function calcNetIncome() {
 }
 
 // -----------------------------------------------
-// 評価画面（暫定）
+// 評価画面 → evaluation.js の showResultScreen() が処理する
 // -----------------------------------------------
-function showResultScreen() {
-  const ni = calcNetIncome();
-  const totalAssets = calcTotalAssets();
-  const equity = gameState.capitalStock + gameState.retainedEarnings;
-  const totalLiab = calcTotalLiabilities();
-  const currentAssets = gameState.cash
-    + gameState.receivables.reduce((s,r) => s + r.amount, 0)
-    + gameState.inventory;
-  const currentLiab = gameState.payables.reduce((s,p) => s + p.amount, 0)
-    + gameState.shortLoans.reduce((s,l) => s + l.principal, 0);
-
-  const currentRatio  = currentLiab > 0 ? (currentAssets / currentLiab * 100).toFixed(1) : '—';
-  const equityRatio   = totalAssets > 0  ? (equity / totalAssets * 100).toFixed(1)        : '—';
-  const profitMargin  = gameState.sales > 0 ? (ni / gameState.sales * 100).toFixed(1)     : '—';
-  const roe           = equity > 0 ? (ni / equity * 100).toFixed(1)                       : '—';
-
-  const msg = `
-===== 決算結果 =====
-売上：${fmt(gameState.sales)}
-当期純利益：${fmt(ni)}
-
-【安全性】
-  流動比率：${currentRatio}%
-  自己資本比率：${equityRatio}%
-
-【収益性】
-  売上高利益率：${profitMargin}%
-  ROE：${roe}%
-
-【信用スコア】${gameState.creditScore} / 100
-  `;
-
-  alert(msg + '\n（Step7で正式な評価画面を実装します）');
-}
 
 function calcTotalAssets() {
   return gameState.cash
