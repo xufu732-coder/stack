@@ -29,7 +29,7 @@
       "amountMin": 2500000,
       "amountMax": 15000000,
       "amountStep": 10000,
-      "growthRate": 0.05,
+      "growthRate": 0.10,
       "duplicateAllowed": false,
       "requiresStock": true,
       "effect": {
@@ -68,7 +68,7 @@
       "amountMin": 500000,
       "amountMax": 5000000,
       "amountStep": 10000,
-      "growthRate": 0.05,
+      "growthRate": 0.10,
       "duplicateAllowed": false,
       "requiresStock": true,
       "effect": null
@@ -120,7 +120,7 @@
       "amountMin": 1500000,
       "amountMax": 10000000,
       "amountStep": 10000,
-      "growthRate": 0.05,
+      "growthRate": 0.10,
       "duplicateAllowed": false,
       "requiresStock": false,
       "effect": {
