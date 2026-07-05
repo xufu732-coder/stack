@@ -125,6 +125,9 @@ function applyEventEffect(ev, choice) {
       // 固定資産の売却を解放する
       gameState.fixedAssetSaleUnlocked = true;
 
+      updateAccountBalance('支払手数料', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
+
       // 仕訳ログに記録（お金が動いたので借方・貸方両方書く）
       addLog(gameState.turn + '月',
         `借）支払手数料 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}`, false);
@@ -137,6 +140,8 @@ function applyEventEffect(ev, choice) {
     case 'cashIn':
       gameState.cash += effect.amount;
       gameState.sales += effect.amount;
+      updateAccountBalance('現金', 'debit', effect.amount);
+      updateAccountBalance('雑収入', 'credit', effect.amount);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）雑収入 ${fmt(effect.amount)}`, false);
       break;
 
@@ -149,6 +154,8 @@ function applyEventEffect(ev, choice) {
       gameState.sgaExpenses += effect.cost;
       gameState.permanentSalesCapBonus = (gameState.permanentSalesCapBonus || 0) + effect.value;
       gameState.activeEffects.push({ label: `売上上限+${Math.round(effect.value*100)}%（恒久）`, color: 'green' });
+      updateAccountBalance('業務委託費', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）業務委託費 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}（売上上限+${Math.round(effect.value*100)}%・恒久）`, false);
       break;
 
@@ -159,6 +166,8 @@ function applyEventEffect(ev, choice) {
         gameState._fraudGameOverRate || 0,
         effect.gameOverRate
       );
+      updateAccountBalance('???資産', 'debit', effect.salesBonus);
+      updateAccountBalance('商品売上', 'credit', effect.salesBonus);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）???資産 ${fmt(effect.salesBonus)} ／ 貸）売上 ${fmt(effect.salesBonus)}`, false);
       break;
 
@@ -177,6 +186,8 @@ function applyEventEffect(ev, choice) {
         winMultiplier: effect.winMultiplier,
         name: ev.name
       });
+      updateAccountBalance('暗号資産', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）暗号資産 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}`, false);
       break;
 
@@ -192,6 +203,8 @@ function applyEventEffect(ev, choice) {
       }
       gameState.receivables = gameState.receivables.filter(r => r.amount > 0);
       gameState.otherExpenses += badDebtAmt;
+      updateAccountBalance('貸倒損失', 'debit', badDebtAmt);
+      updateAccountBalance('売掛金', 'credit', badDebtAmt);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）貸倒損失 ${fmt(badDebtAmt)} ／ 貸）売掛金 ${fmt(badDebtAmt)}`, false);
       break;
     }
@@ -215,6 +228,10 @@ function applyEventEffect(ev, choice) {
       }
       gameState.receivables = gameState.receivables.filter(r => r.amount > 0);
       gameState.otherExpenses += lossAmt;
+      updateAccountBalance('顧問料', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
+      updateAccountBalance('貸倒損失', 'debit', lossAmt);
+      updateAccountBalance('売掛金', 'credit', lossAmt);
       addLog(gameState.turn + '月',
         `【イベント】${ev.name}：借）顧問料 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}<br>借）貸倒損失 ${fmt(lossAmt)} ／ 貸）売掛金 ${fmt(lossAmt)}`, false);
       break;
@@ -234,6 +251,8 @@ function applyEventEffect(ev, choice) {
         direction: 'up'
       });
       gameState.costRate += effect.costRateUp;
+      updateAccountBalance('修繕費', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）修繕費 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}（原価率一時+${Math.round(effect.costRateUp*100)}%）`, false);
       break;
 
@@ -268,6 +287,8 @@ function applyEventEffect(ev, choice) {
       }
       if (disposalLoss > 0) {
         gameState.otherExpenses += disposalLoss;
+        updateAccountBalance('固定資産除却損', 'debit', disposalLoss);
+        updateAccountBalance('機械装置', 'credit', disposalLoss);
       }
 
       const years = 5;
@@ -281,6 +302,8 @@ function applyEventEffect(ev, choice) {
 
       gameState._pendingCostDown = (gameState._pendingCostDown || 0) + effect.costRateDown;
       gameState.activeEffects.push({ label: `原価率-${Math.round(effect.costRateDown*100)}%`, color: 'green' });
+      updateAccountBalance('機械装置', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
 
       let logText = `【イベント】${ev.name}：借）機械装置 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}（原価率-${Math.round(effect.costRateDown*100)}%）`;
       if (disposalLoss > 0) {
@@ -295,6 +318,8 @@ function applyEventEffect(ev, choice) {
       gameState.sales += effect.amount;
       gameState._pendingCostDown = (gameState._pendingCostDown || 0) + effect.costRateDown;
       gameState.activeEffects.push({ label: `原価率-${Math.round(effect.costRateDown*100)}%`, color: 'green' });
+      updateAccountBalance('現金', 'debit', effect.amount);
+      updateAccountBalance('補助金収入', 'credit', effect.amount);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）補助金収入 ${fmt(effect.amount)}（原価率-${Math.round(effect.costRateDown*100)}%）`, false);
       break;
 
@@ -311,6 +336,8 @@ function applyEventEffect(ev, choice) {
         type: 'salesCapUp',
         value: effect.value
       });
+      updateAccountBalance('教育研修費', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）教育研修費 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}（${effect.delayTurns}ターン後に売上上限+${Math.round(effect.value*100)}%）`, false);
       break;
 
@@ -321,6 +348,8 @@ function applyEventEffect(ev, choice) {
       }
       gameState.cash -= effect.cost;
       gameState.inventory += effect.cost;
+      updateAccountBalance('商品', 'debit', effect.cost);
+      updateAccountBalance('現金', 'credit', effect.cost);
       const cogsAmt = Math.round(effect.sales * gameState.costRate);
       if (gameState.inventory >= cogsAmt) {
         gameState.cash += effect.sales;
@@ -328,6 +357,10 @@ function applyEventEffect(ev, choice) {
         gameState.cogs += cogsAmt;
         gameState.inventory -= cogsAmt;
         recordMonthlySales(effect.sales);
+        updateAccountBalance('現金', 'debit', effect.sales);
+        updateAccountBalance('商品売上', 'credit', effect.sales);
+        updateAccountBalance('商品売上原価', 'debit', cogsAmt);
+        updateAccountBalance('商品', 'credit', cogsAmt);
         addLog(gameState.turn + '月',
           `【イベント】${ev.name}：借）仕入 ${fmt(effect.cost)} ／ 貸）現金 ${fmt(effect.cost)}<br>借）現金 ${fmt(effect.sales)} ／ 貸）商品売上 ${fmt(effect.sales)}`, false);
       }
@@ -342,6 +375,10 @@ function applyEventEffect(ev, choice) {
         gameState.cogs += cogsFromStock;
         gameState.inventory -= cogsFromStock;
         recordMonthlySales(effect.sales);
+        updateAccountBalance('現金', 'debit', effect.sales);
+        updateAccountBalance('商品売上', 'credit', effect.sales);
+        updateAccountBalance('商品売上原価', 'debit', cogsFromStock);
+        updateAccountBalance('商品', 'credit', cogsFromStock);
         addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.sales)} ／ 貸）商品売上 ${fmt(effect.sales)}`, false);
       } else {
         result.message = '在庫が不足していたため、失注しました。';
@@ -383,6 +420,8 @@ function applyEventEffect(ev, choice) {
         monthlyPrincipal: Math.round(effect.amount / 120),
         interestRate: 0.03 + effect.interestRatePenalty
       });
+      updateAccountBalance('現金', 'debit', effect.amount);
+      updateAccountBalance('長期借入金', 'credit', effect.amount);
       addLog(gameState.turn + '月', `【イベント】${ev.name}：借）現金 ${fmt(effect.amount)} ／ 貸）長期借入金 ${fmt(effect.amount)}`, false);
       break;
 
@@ -431,12 +470,17 @@ function resolveDelayedEffects() {
           gameState.cash += prize;
           gameState.cryptoAssets = (gameState.cryptoAssets || 0) - g.amount;
           gameState.sales += gain;
+          updateAccountBalance('現金', 'debit', prize);
+          updateAccountBalance('暗号資産', 'credit', g.amount);
+          if (gain > 0) updateAccountBalance('暗号資産売却益', 'credit', gain);
           addLog(gameState.turn + '月', `【ギャンブル結果】${g.name}：借）現金 ${fmt(prize)} ／ 貸）暗号資産 ${fmt(g.amount)}・暗号資産売却益 ${fmt(gain)}`, false);
           addNotice('green', '🎉', 'ギャンブル当選！', `${fmt(prize)}が入金されました`);
         } else {
           gameState.cryptoAssets = (gameState.cryptoAssets || 0) - g.amount;
           gameState.otherExpenses += g.amount;
           gameState._hadGamblingLoss = true;
+          updateAccountBalance('暗号資産売却損', 'debit', g.amount);
+          updateAccountBalance('暗号資産', 'credit', g.amount);
           addLog(gameState.turn + '月', `【ギャンブル結果】${g.name}：借）暗号資産売却損 ${fmt(g.amount)} ／ 貸）暗号資産 ${fmt(g.amount)}`, false);
           addNotice('red', '💸', 'ギャンブル失敗', '投資額が消滅しました');
         }
